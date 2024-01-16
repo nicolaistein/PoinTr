@@ -19,3 +19,6 @@ python setup.py install
 cd $HOME/extensions/gridding_loss
 python setup.py install
 
+# EMD
+cd $HOME/extensions/emd
+python setup.py install
