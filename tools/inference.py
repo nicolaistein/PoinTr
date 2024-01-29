@@ -103,7 +103,7 @@ def inference_single(model, pc_path, args, config, root=None):
         print("Saving .pcd file...")
         pcd = o3d.geometry.PointCloud()
         pcd.points = o3d.utility.Vector3dVector(dense_points)
-        o3d.io.write_point_cloud(os.path.join(target_path, 'fine.pcd'), pcd)
+        o3d.io.write_point_cloud(os.path.join(target_path, 'fine.pcd'), pcd, write_ascii=True)
 
     
     return
