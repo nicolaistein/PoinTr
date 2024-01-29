@@ -507,6 +507,137 @@ class PointTransformerDecoderEntry(PointTransformerDecoder):
         super().__init__(**dict(config))
 
 ######################################## Grouper ########################################  
+        
+class GeomGCNN_Grouper(nn.Module):
+    def __init__(self, k = 16):
+        super().__init__()
+        '''
+        K has to be 16
+        '''
+        print('using group version 2')
+        self.k = k
+        # self.knn = KNN(k=k, transpose_mode=False)
+        self.input_trans = nn.Conv1d(3, 8, 1)
+
+        self.layer1 = nn.Sequential(nn.Conv2d(16, 32, kernel_size=1, bias=False),
+                                   nn.GroupNorm(4, 32),
+                                   nn.LeakyReLU(negative_slope=0.2)
+                                   )
+
+        self.layer2 = nn.Sequential(nn.Conv2d(64, 64, kernel_size=1, bias=False),
+                                   nn.GroupNorm(4, 64),
+                                   nn.LeakyReLU(negative_slope=0.2)
+                                   )
+
+        self.layer3 = nn.Sequential(nn.Conv2d(128, 64, kernel_size=1, bias=False),
+                                   nn.GroupNorm(4, 64),
+                                   nn.LeakyReLU(negative_slope=0.2)
+                                   )
+
+        self.layer4 = nn.Sequential(nn.Conv2d(128, 128, kernel_size=1, bias=False),
+                                   nn.GroupNorm(4, 128),
+                                   nn.LeakyReLU(negative_slope=0.2)
+                                   )
+        self.num_features = 128
+    @staticmethod
+    def fps_downsample(coor, x, num_group):
+        xyz = coor.transpose(1, 2).contiguous() # b, n, 3
+        fps_idx = pointnet2_utils.furthest_point_sample(xyz, num_group)
+
+        combined_x = torch.cat([coor, x], dim=1)
+
+        new_combined_x = (
+            pointnet2_utils.gather_operation(
+                combined_x, fps_idx
+            )
+        )
+
+        new_coor = new_combined_x[:, :3]
+        new_x = new_combined_x[:, 3:]
+
+        return new_coor, new_x
+
+    def get_graph_feature(self, coor_q, x_q, coor_k, x_k):
+
+        print("get_graph_feature =====================================")
+
+        # coor: bs, 3, np, x: bs, c, np
+        print("coor_q shape: ", coor_q.shape)
+        print("x_q shape: ", x_q.shape)
+        print("coor_k shape: ", coor_k.shape)
+        print("x_k shape: ", x_k.shape)
+
+        k = self.k
+        batch_size = x_k.size(0)
+        num_points_k = x_k.size(2)
+        num_points_q = x_q.size(2)
+
+        with torch.no_grad():
+            # _, idx = self.knn(coor_k, coor_q)  # bs k np
+            idx = knn_point(k, coor_k.transpose(-1, -2).contiguous(), coor_q.transpose(-1, -2).contiguous()) # B G M
+            print("idx shape (knn result): ", idx.shape)
+            idx = idx.transpose(-1, -2).contiguous()
+            print("idx shape transposed: ", idx.shape)
+            assert idx.shape[1] == k
+            idx_base = torch.arange(0, batch_size, device=x_q.device).view(-1, 1, 1) * num_points_k
+            idx = idx + idx_base
+            idx = idx.view(-1)
+        
+        print("idx final shape: ", idx.shape)
+        num_dims = x_k.size(1)
+        x_k = x_k.transpose(2, 1).contiguous()
+        feature = x_k.view(batch_size * num_points_k, -1)[idx, :]
+        print("feature shape: ", feature.shape)
+        feature = feature.view(batch_size, k, num_points_q, num_dims).permute(0, 3, 2, 1).contiguous()
+        print("feature shape view: ", feature.shape)
+        x_q = x_q.view(batch_size, num_dims, num_points_q, 1).expand(-1, -1, -1, k)
+        feature = torch.cat((feature - x_q, x_q), dim=1)
+
+        print("feature final shape: ", feature.shape)
+        return feature
+
+    def forward(self, x, num):
+        '''
+            INPUT:
+                x : bs N 3
+                num : list e.g.[1024, 512]
+            ----------------------
+            OUTPUT:
+
+                coor bs N 3
+                f    bs N C(128) 
+        '''
+
+        x = x.transpose(-1, -2).contiguous()
+
+        coor = x
+        f = self.input_trans(x)
+
+        f = self.get_graph_feature(coor, f, coor, f)
+        f = self.layer1(f)
+        f = f.max(dim=-1, keepdim=False)[0]
+
+        coor_q, f_q = self.fps_downsample(coor, f, num[0])
+        f = self.get_graph_feature(coor_q, f_q, coor, f)
+        f = self.layer2(f)
+        f = f.max(dim=-1, keepdim=False)[0]
+        coor = coor_q
+
+        f = self.get_graph_feature(coor, f, coor, f)
+        f = self.layer3(f)
+        f = f.max(dim=-1, keepdim=False)[0]
+
+        coor_q, f_q = self.fps_downsample(coor, f, num[1])
+        f = self.get_graph_feature(coor_q, f_q, coor, f)
+        f = self.layer4(f)
+        f = f.max(dim=-1, keepdim=False)[0]
+        coor = coor_q
+
+        coor = coor.transpose(-1, -2).contiguous()
+        f = f.transpose(-1, -2).contiguous()
+
+        return coor, f
+        
 class DGCNN_Grouper(nn.Module):
     def __init__(self, k = 16):
         super().__init__()
@@ -765,7 +896,7 @@ class PCTransformer(nn.Module):
         decoder_config = config.decoder_config
         self.center_num  = getattr(config, 'center_num', [512, 128])
         self.encoder_type = config.encoder_type
-        assert self.encoder_type in ['graph', 'pn'], f'unexpected encoder_type {self.encoder_type}'
+        assert self.encoder_type in ['graph', 'pn', 'geomgcnn'], f'unexpected encoder_type {self.encoder_type}'
 
         in_chans = 3
         self.num_query = query_num = config.num_query
@@ -775,6 +906,8 @@ class PCTransformer(nn.Module):
         # base encoder
         if self.encoder_type == 'graph':
             self.grouper = DGCNN_Grouper(k = 16)
+        elif self.encoder_type == 'geomgcnn':
+            self.grouper = GeomGCNN_Grouper(k = 16)
         else:
             self.grouper = SimpleEncoder(k = 32, embed_dims=512)
         self.pos_embed = nn.Sequential(
