@@ -89,6 +89,7 @@ def inference_single(model, pc_path, args, config, root=None):
         target_path = os.path.join(args.out_pc_root, os.path.splitext(pc_path)[0])
         os.makedirs(target_path, exist_ok=True)
 
+        print("Dense points shape: ", dense_points.shape)
         np.save(os.path.join(target_path, 'fine.npy'), dense_points)
         if args.save_vis_img:
             input_img = misc.get_ptcloud_img(pc_ndarray_normalized['input'].numpy())
