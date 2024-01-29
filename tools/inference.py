@@ -99,11 +99,11 @@ def inference_single(model, pc_path, args, config, root=None):
             cv2.imwrite(os.path.join(target_path, 'input.jpg'), input_img)
             cv2.imwrite(os.path.join(target_path, 'fine.jpg'), dense_img)
 
-            # save result as .pcd file for visualization
-            print("Saving .pcd file...")
-            pcd = o3d.geometry.PointCloud()
-            pcd.points = o3d.utility.Vector3dVector(dense_points)
-            o3d.io.write_point_cloud(os.path.join(target_path, 'fine.pcd'), pcd)
+        # save result as .pcd file for visualization
+        print("Saving .pcd file...")
+        pcd = o3d.geometry.PointCloud()
+        pcd.points = o3d.utility.Vector3dVector(dense_points)
+        o3d.io.write_point_cloud(os.path.join(target_path, 'fine.pcd'), pcd)
 
     
     return
