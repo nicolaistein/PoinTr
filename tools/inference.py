@@ -5,6 +5,7 @@
 import argparse
 import os
 import numpy as np
+import open3d as o3d
 import cv2
 import sys
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -49,6 +50,7 @@ def get_args():
 
     return args
 
+
 def inference_single(model, pc_path, args, config, root=None):
     if root is not None:
         pc_file = os.path.join(root, pc_path)
@@ -89,12 +91,20 @@ def inference_single(model, pc_path, args, config, root=None):
         target_path = os.path.join(args.out_pc_root, os.path.splitext(pc_path)[0])
         os.makedirs(target_path, exist_ok=True)
 
+        print("Dense points shape: ", dense_points.shape)
         np.save(os.path.join(target_path, 'fine.npy'), dense_points)
         if args.save_vis_img:
             input_img = misc.get_ptcloud_img(pc_ndarray_normalized['input'].numpy())
             dense_img = misc.get_ptcloud_img(dense_points)
             cv2.imwrite(os.path.join(target_path, 'input.jpg'), input_img)
             cv2.imwrite(os.path.join(target_path, 'fine.jpg'), dense_img)
+
+        # save result as .pcd file for visualization
+        print("Saving .pcd file...")
+        pcd = o3d.geometry.PointCloud()
+        pcd.points = o3d.utility.Vector3dVector(dense_points)
+        o3d.io.write_point_cloud(os.path.join(target_path, 'fine.pcd'), pcd, write_ascii=True)
+
     
     return
 
