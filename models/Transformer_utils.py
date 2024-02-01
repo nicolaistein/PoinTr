@@ -19,14 +19,18 @@ import einops
 ########################################################################################################################
 
 def transform_pointcloud(pointcloud):
+
     # Extracting coordinates of points
-    p = pointcloud[:, :, :3]
+    #p = pointcloud[:, :, :3]
+    p = pointcloud
     
     # Calculating normal vectors
     n = calculate_normals(p)
+    print("Normals shape: ", n.shape)
     
     # Finding nearest neighbors
     x = find_nearest_neighbors(p)
+    print("Nearest neighbors shape: ", x.shape)
     
     # Computing the 9-dimensional transformation
     transformed_points = torch.cat([
@@ -40,6 +44,7 @@ def transform_pointcloud(pointcloud):
     return transformed_points
 
 def calculate_normals(points):
+    print("Calculating normals...")
     # Calculate normals using cross product of neighboring vectors
     # Assuming points has shape [batch_size, num_points, 3]
     v1 = points[:, :-1] - points[:, 1:]
@@ -53,6 +58,7 @@ def calculate_normals(points):
     return normals
 
 def find_nearest_neighbors(points):
+    print("Finding nearest neighbors...")
     # Assuming points has shape [batch_size, num_points, 3]
     # Finding nearest neighbors using Euclidean distance
     distances = torch.sum((points.unsqueeze(2) - points.unsqueeze(1)) ** 2, dim=-1)
@@ -64,6 +70,7 @@ def find_nearest_neighbors(points):
     return x
 
 def calculate_principal_curvatures(points):
+    print("Calculating principal curvatures...")
     # Assuming points has shape [batch_size, num_points, 3]
     # Assuming a local window around each point for the quadratic surface fitting
     # Implement your own code for quadratic surface fitting and principal curvature calculation
