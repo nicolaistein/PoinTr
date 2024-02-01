@@ -11,8 +11,73 @@ import torch
 import torch.nn as nn
 from timm.models.layers import DropPath
 from pointnet2_ops import pointnet2_utils
+import torch.nn.functional as F
 from utils.logger import *
 import einops
+
+
+########################################################################################################################
+
+def transform_pointcloud(pointcloud):
+    # Extracting coordinates of points
+    p = pointcloud[:, :, :3]
+    
+    # Calculating normal vectors
+    n = calculate_normals(p)
+    
+    # Finding nearest neighbors
+    x = find_nearest_neighbors(p)
+    
+    # Computing the 9-dimensional transformation
+    transformed_points = torch.cat([
+        p,
+        n,
+        torch.sqrt(torch.sum((x - p) ** 2, dim=-1) - torch.sum(n * (x - p), dim=-1) ** 2),
+        n * (x - p),
+        calculate_principal_curvatures(p)
+    ], dim=-1)
+    
+    return transformed_points
+
+def calculate_normals(points):
+    # Calculate normals using cross product of neighboring vectors
+    # Assuming points has shape [batch_size, num_points, 3]
+    v1 = points[:, :-1] - points[:, 1:]
+    v2 = points[:, 2:] - points[:, 1:-1]
+    
+    normals = F.normalize(torch.cross(v1, v2, dim=-1), p=2, dim=-1)
+    
+    # Extend the normals for the first and last points
+    normals = torch.cat([normals[:, :1], normals, normals[:, -1:]], dim=1)
+    
+    return normals
+
+def find_nearest_neighbors(points):
+    # Assuming points has shape [batch_size, num_points, 3]
+    # Finding nearest neighbors using Euclidean distance
+    distances = torch.sum((points.unsqueeze(2) - points.unsqueeze(1)) ** 2, dim=-1)
+    _, indices = torch.topk(distances, k=2, dim=-1, largest=False)
+    
+    # Choosing the second nearest neighbor (the first one is the point itself)
+    x = torch.gather(points, dim=1, index=indices[:, :, 1].unsqueeze(-1).expand(-1, -1, 3))
+    
+    return x
+
+def calculate_principal_curvatures(points):
+    # Assuming points has shape [batch_size, num_points, 3]
+    # Assuming a local window around each point for the quadratic surface fitting
+    # Implement your own code for quadratic surface fitting and principal curvature calculation
+    # ...
+    # Placeholder for demonstration purposes (replace with actual implementation)
+    k, s = torch.randn_like(points[:, :, :2]), torch.randn_like(points[:, :, :2])
+    
+    curvature = 0.5 - (1 / torch.pi) * torch.atan2(k + s, k - s)
+    
+    return curvature
+
+
+########################################################################################################################
+
 
 def knn_point(nsample, xyz, new_xyz):
     """

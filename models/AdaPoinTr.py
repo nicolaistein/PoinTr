@@ -628,7 +628,14 @@ class GeomGCNN_Grouper(nn.Module):
                 f    bs N C(128) 
         '''
 
+        print("forward =====================================")
+
+        print("x shape: ", x.shape)
+        print("num: ", num)
+
         x = x.transpose(-1, -2).contiguous()
+
+        print("x shape transposed: ", x.shape)
 
         coor = x
         f = self.input_trans(x)
