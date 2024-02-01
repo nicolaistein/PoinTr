@@ -45,10 +45,14 @@ def transform_pointcloud(pointcloud):
 
 def calculate_normals(points):
     print("Calculating normals...")
+    print("Points shape: ", points.shape)
     # Calculate normals using cross product of neighboring vectors
     # Assuming points has shape [batch_size, num_points, 3]
     v1 = points[:, :-1] - points[:, 1:]
     v2 = points[:, 2:] - points[:, 1:-1]
+
+    print("v1 shape: ", v1.shape)
+    print("v2 shape: ", v2.shape)
     
     normals = F.normalize(torch.cross(v1, v2, dim=-1), p=2, dim=-1)
     
