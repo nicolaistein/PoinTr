@@ -51,12 +51,8 @@ def calculate_normals(points):
 
     batch_size, num_points, _ = pointclouds.size()
 
-    # Reshape the input point clouds to [batch_size * num_points, 3]
-    reshaped_pointclouds = pointclouds.view(-1, 3)
-    print("Reshaped pointclouds shape: ", reshaped_pointclouds.shape)
-
     # Use the cdist function to calculate pairwise distances
-    pairwise_distances = torch.cdist(reshaped_pointclouds, reshaped_pointclouds)
+    pairwise_distances = torch.cdist(pointclouds, pointclouds)
     print("Pairwise distances shape: ", pairwise_distances.shape)
 
     # Get the indices of the k-nearest neighbors for each point
@@ -64,19 +60,20 @@ def calculate_normals(points):
     print("Indices shape: ", indices.shape)
 
     # Extract the coordinates of the neighboring points
-    neighbor_points = torch.gather(reshaped_pointclouds.unsqueeze(1).expand(-1, k_neighbors, -1),
-                                   0, indices.unsqueeze(-1).expand(-1, -1, 3))
+    neighbor_points = torch.gather(pointclouds.unsqueeze(2).expand(-1, -1, k_neighbors, -1),
+                                   1, indices.unsqueeze(-1).expand(-1, -1, -1, 3))
     print("Neighbor points shape: ", neighbor_points.shape)
 
     # Calculate the local coordinate system for each point
-    centered_neighbor_points = neighbor_points - reshaped_pointclouds.unsqueeze(1).expand(-1, k_neighbors, -1)
+    centered_neighbor_points = neighbor_points - pointclouds.unsqueeze(2).unsqueeze(-1).expand(-1, -1, k_neighbors, 3)
+    
     print("Centered neighbor points shape: ", centered_neighbor_points.shape)
-    cov_matrix = torch.bmm(centered_neighbor_points.transpose(1, 2), centered_neighbor_points)
+    cov_matrix = torch.bmm(centered_neighbor_points.transpose(2, 3), centered_neighbor_points)
     print("Covariance matrix shape: ", cov_matrix.shape)
 
     # Use SVD to compute the normal vectors
     _, _, v = torch.svd(cov_matrix)
-    normals = v[:, :, 0].reshape(batch_size, num_points, 3)
+    normals = v[:, :, :, 0].transpose(1, 2)
     print("Normals shape: ", normals.shape)
 
     # Make sure the normals are unit vectors
