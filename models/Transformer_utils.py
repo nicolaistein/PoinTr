@@ -101,7 +101,9 @@ def calculate_normals(points):
     print("Normal vector test 1: ", eigenvectors[0, 0, 0, :])
     print("Normal vector test 2: ", eigenvectors[0, 0, 1, :])
     print("Normal vector test 3: ", eigenvectors[0, 0, 2, :])
-    print("Normal vector test 4: ", eigenvectors[0, 0, 3, :])
+    print("Normal vector test 4: ", eigenvectors[0, 1, 0, :])
+    print("Normal vector test 4: ", eigenvectors[0, 1, 1, :])
+    print("Normal vector test 4: ", eigenvectors[0, 1, 2, :])
     #print("Normals shape: ", normal_vector.shape)
 
     return normal_vector
