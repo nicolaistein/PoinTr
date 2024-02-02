@@ -99,7 +99,8 @@ class PCN(data.Dataset):
             if type(file_path) == list:
                 file_path = file_path[rand_idx]
 
-            points, normals = IO.get(file_path)
+    #        points, normals = IO.get(file_path)
+            points = IO.get(file_path)
             data[ri] = points.astype(np.float32)
     #        if ri == 'partial':
     #            data['normal'] = normals.astype(np.float32)
@@ -204,7 +205,7 @@ class PCNv2(data.Dataset):
             if type(file_path) == list:
                 file_path = file_path[rand_idx]
 
-            points, normals = IO.get(file_path)
+            points = IO.get(file_path)
             data[ri] = points.astype(np.float32)
             print("PCNDatasetv2.py: data[ri].shape: ", data[ri].shape)
 
