@@ -33,9 +33,12 @@ def transform_pointcloud(pointcloud):
     print("Nearest neighbors shape: ", x.shape)
 
     alpha = torch.sqrt(torch.sum((x - p) ** 2, dim=-1) - torch.sum(n * (x - p), dim=-1) ** 2)
-    beta = n * (x - p)
-
     print("Alpha shape: ", alpha.shape)
+    alpha = alpha.unsqueeze(-1)
+    print("Alpha shape unsqueezed: ", alpha.shape)
+
+    beta = torch.sum(n * (x - p), dim=-1).unsqueeze(-1)
+
     print("Beta shape: ", beta.shape)
     
     # Computing the 9-dimensional transformation
