@@ -14,7 +14,8 @@ from pointnet2_ops import pointnet2_utils
 import torch.nn.functional as F
 from utils.logger import *
 import einops
-
+import open3d as o3d
+import numpy as np
 
 ########################################################################################################################
 
@@ -23,10 +24,11 @@ def transform_pointcloud(pointcloud):
     # Extracting coordinates of points
     #p = pointcloud[:, :, :3]
     p = pointcloud
+    print("Points shape: ", p.shape)
     
     # Calculating normal vectors
-    n = calculate_normals(p)
-    #print("Normals shape: ", n.shape)
+    n = calculate_normals_open3d(p)
+    print("Normals shape: ", n.shape)
     
     # Finding nearest neighbors
     x = find_nearest_neighbors(p)
@@ -52,6 +54,23 @@ def transform_pointcloud(pointcloud):
     ], dim=-1)
     
     return transformed_points
+
+def calculate_normals_open3d(points):
+    #print("Calculating normals...")
+    # Assuming points has shape [batch_size, num_points, 3]
+ 
+    # Create an Open3D point cloud
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(points)
+
+    # Estimate normals
+    pcd.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.1, max_nn=30))
+
+    # Extract normals
+    normals = np.asarray(pcd.normals)
+    normals_tensor = torch.from_numpy(normals)
+
+    return normals_tensor
 
 def calculate_normals(points):
     #print("Calculating normals...")

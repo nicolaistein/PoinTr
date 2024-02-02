@@ -35,7 +35,7 @@ class IO:
         print("normals.shape: ", normals.shape)
         result_array = np.concatenate((ptcloud, normals), axis=1)
         print("result_array.shape: ", result_array.shape)
-        return result_array
+        return ptcloud
     #    return ptcloud, normals
         return ptcloud
 
