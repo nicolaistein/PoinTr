@@ -38,7 +38,7 @@ def transform_pointcloud(pointcloud):
         n,
         torch.sqrt(torch.sum((x - p) ** 2, dim=-1) - torch.sum(n * (x - p), dim=-1) ** 2),
         n * (x - p),
-        calculate_principal_curvatures(p)
+    #    calculate_principal_curvatures(p)
     ], dim=-1)
     
     return transformed_points
