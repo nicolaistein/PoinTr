@@ -99,14 +99,21 @@ class PCN(data.Dataset):
             if type(file_path) == list:
                 file_path = file_path[rand_idx]
 
+            points, normals = IO.get(file_path)
+            data[ri] = points.astype(np.float32)
+        #    if ri == 'partial':
+        #        data['normal'] = normals.astype(np.float32)
 
-            data[ri] = IO.get(file_path).astype(np.float32)
-            print("PCNDataset.py: data[ri].shape: ", data[ri].shape)
+            print("PCNDatasetv2.py: data[ri].shape: ", data[ri].shape)
 
         assert data['gt'].shape[0] == self.npoints
 
         if self.transforms is not None:
             data = self.transforms(data)
+
+        print("Data: ", data.keys())
+        print("Data partial: ", data['partial'].shape)
+        print("Data gt: ", data['gt'].shape)
 
         return sample['taxonomy_id'], sample['model_id'], (data['partial'], data['gt'])
 
@@ -195,7 +202,9 @@ class PCNv2(data.Dataset):
             file_path = sample['%s_path' % ri]
             if type(file_path) == list:
                 file_path = file_path[rand_idx]
-            data[ri] = IO.get(file_path).astype(np.float32)
+
+            points, normals = IO.get(file_path)
+            data[ri] = points.astype(np.float32)
             print("PCNDatasetv2.py: data[ri].shape: ", data[ri].shape)
 
         assert data['gt'].shape[0] == self.npoints
