@@ -1119,6 +1119,10 @@ class AdaPoinTr(nn.Module):
         return loss_denoised, loss_recon
 
     def forward(self, xyz):
+
+        print("AdaPoinTr forward =====================================")
+        print("xyz shape: ", xyz.shape)
+
         q, coarse_point_cloud, denoise_length = self.base_model(xyz) # B M C and B M 3
     
         B, M ,C = q.shape

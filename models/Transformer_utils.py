@@ -34,6 +34,7 @@ def transform_pointcloud(pointcloud):
 
     alpha = torch.sqrt(torch.sum((x - p) ** 2, dim=-1) - torch.sum(n * (x - p), dim=-1) ** 2)
     #print("Alpha shape: ", alpha.shape)
+
     alpha = alpha.unsqueeze(-1)
     #print("Alpha shape unsqueezed: ", alpha.shape)
 
@@ -55,7 +56,7 @@ def transform_pointcloud(pointcloud):
 def calculate_normals(points):
     #print("Calculating normals...")
     pointclouds = points
-    k_neighbors = 4
+    k_neighbors = 3
 
     batch_size, num_points, _ = pointclouds.size()
 
@@ -95,15 +96,19 @@ def calculate_normals(points):
     #print("Eigenvalues shape: ", eigenvalues.shape)
     #print("Eigenvectors shape: ", eigenvectors.shape)
 
+    # Find the index of the smallest eigenvalue
+    min_eigenvalue_index = torch.argmin(eigenvalues)
+
+
     # 4. Choose the eigenvector corresponding to the smallest eigenvalue as the normal vector
-    normal_vector = eigenvectors[:, :, :, 0]  # Assuming the smallest eigenvalue is at index 0
-    print("Normal vector shape: ", normal_vector.shape)
-    print("Normal vector test 1: ", eigenvectors[0, 0, 0, :])
-    print("Normal vector test 2: ", eigenvectors[0, 0, 1, :])
-    print("Normal vector test 3: ", eigenvectors[0, 0, 2, :])
-    print("Normal vector test 4: ", eigenvectors[0, 1, 0, :])
-    print("Normal vector test 4: ", eigenvectors[0, 1, 1, :])
-    print("Normal vector test 4: ", eigenvectors[0, 1, 2, :])
+    #normal_vector = eigenvectors[:, :, :, 0]  # Assuming the smallest eigenvalue is at index 0
+    # Extract the corresponding eigenvector
+    normal_vector = eigenvectors[:, :, :, min_eigenvalue_index]
+
+    #print("Test point 1: ", pointclouds[0, 0, :])
+    #print("Normal vector shape: ", normal_vector.shape)
+    #print("Normal vector test 1: ", eigenvectors[0, 0, :, :])
+    #print("Eigenvalues test 1: ", eigenvalues[0, 0, :, :])
     #print("Normals shape: ", normal_vector.shape)
 
     return normal_vector

@@ -98,7 +98,10 @@ class PCN(data.Dataset):
             file_path = sample['%s_path' % ri]
             if type(file_path) == list:
                 file_path = file_path[rand_idx]
+
+
             data[ri] = IO.get(file_path).astype(np.float32)
+            print("PCNDataset.py: data[ri].shape: ", data[ri].shape)
 
         assert data['gt'].shape[0] == self.npoints
 
@@ -193,6 +196,7 @@ class PCNv2(data.Dataset):
             if type(file_path) == list:
                 file_path = file_path[rand_idx]
             data[ri] = IO.get(file_path).astype(np.float32)
+            print("PCNDatasetv2.py: data[ri].shape: ", data[ri].shape)
 
         assert data['gt'].shape[0] == self.npoints
 

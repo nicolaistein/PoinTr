@@ -30,6 +30,10 @@ class IO:
     def _read_pcd(cls, file_path):
         pc = open3d.io.read_point_cloud(file_path)
         ptcloud = np.array(pc.points)
+        print("ptcloud.shape: ", ptcloud.shape)
+        normals = np.array(pc.normals)
+        print("normals.shape: ", normals.shape)
+        return ptcloud, normals
         return ptcloud
 
     @classmethod
