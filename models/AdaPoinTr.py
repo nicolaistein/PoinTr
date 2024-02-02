@@ -559,13 +559,13 @@ class GeomGCNN_Grouper(nn.Module):
 
     def get_graph_feature(self, coor_q, x_q, coor_k, x_k):
 
-        print("get_graph_feature =====================================")
+    #    print("get_graph_feature =====================================")
 
         # coor: bs, 3, np, x: bs, c, np
-        print("coor_q shape: ", coor_q.shape)
-        print("x_q shape: ", x_q.shape)
-        print("coor_k shape: ", coor_k.shape)
-        print("x_k shape: ", x_k.shape)
+    #    print("coor_q shape: ", coor_q.shape)
+    #    print("x_q shape: ", x_q.shape)
+    #    print("coor_k shape: ", coor_k.shape)
+    #    print("x_k shape: ", x_k.shape)
 
         # coor_q:   [bs, 3, np]     [16, 3, 256]
         # x_q:      [bs, c, np]     [16, 64, 256]
@@ -583,9 +583,9 @@ class GeomGCNN_Grouper(nn.Module):
 
             # idx: [bs, np, k]      [16, 256, 16]
 
-            print("idx shape (knn result): ", idx.shape)
+    #        print("idx shape (knn result): ", idx.shape)
             idx = idx.transpose(-1, -2).contiguous()
-            print("idx shape transposed: ", idx.shape)
+    #        print("idx shape transposed: ", idx.shape)
             assert idx.shape[1] == k
             idx_base = torch.arange(0, batch_size, device=x_q.device).view(-1, 1, 1) * num_points_k
             idx = idx + idx_base
@@ -593,24 +593,24 @@ class GeomGCNN_Grouper(nn.Module):
         
         # idx: [bs*np*k]        [16*256*16=65536]
 
-        print("idx final shape: ", idx.shape)
+    #    print("idx final shape: ", idx.shape)
         num_dims = x_k.size(1)
         x_k = x_k.transpose(2, 1).contiguous()
         feature = x_k.view(batch_size * num_points_k, -1)[idx, :]
 
         
         # feature: [bs*np*k, c]        [65536, 64]
-        print("feature shape: ", feature.shape)
+    #    print("feature shape: ", feature.shape)
         feature = feature.view(batch_size, k, num_points_q, num_dims).permute(0, 3, 2, 1).contiguous()
 
         # feature: [bs, c, np, k]      [16, 64, 256, 16]
-        print("feature shape view: ", feature.shape)
+    #    print("feature shape view: ", feature.shape)
         x_q = x_q.view(batch_size, num_dims, num_points_q, 1).expand(-1, -1, -1, k)
         
-        print("x_q view: ", x_q.shape)
+    #    print("x_q view: ", x_q.shape)
         feature = torch.cat((feature - x_q, x_q), dim=1)
 
-        print("feature final shape: ", feature.shape)
+    #    print("feature final shape: ", feature.shape)
 
         # feature: [bs, 2c, np, k]      [16, 128, 256, 16]
 
@@ -628,25 +628,25 @@ class GeomGCNN_Grouper(nn.Module):
                 f    bs N C(128) 
         '''
 
-        print("forward =====================================")
+    #    print("forward =====================================")
 
-        print("x shape: ", x.shape)
-        print("num: ", num)
+    #    print("x shape: ", x.shape)
+    #    print("num: ", num)
 
         transformed = transform_pointcloud(x)
 
         
 
-        print("transformed shape: ", transformed.shape)
+    #    print("transformed shape: ", transformed.shape)
 
         transformed = transformed.transpose(-1, -2).contiguous()
 
-        print("transformed shape transposed: ", transformed.shape)
+    #    print("transformed shape transposed: ", transformed.shape)
 
 
         x = x.transpose(-1, -2).contiguous()
 
-        print("x shape transposed: ", x.shape)
+    #    print("x shape transposed: ", x.shape)
 
         coor = x
         f = self.input_trans(transformed)
