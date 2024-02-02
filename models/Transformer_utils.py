@@ -24,11 +24,11 @@ def transform_pointcloud(pointcloud):
     # Extracting coordinates of points
     #p = pointcloud[:, :, :3]
     p = pointcloud
-    print("Points shape: ", p.shape)
+#    print("Points shape: ", p.shape)
     
     # Calculating normal vectors
     n = calculate_normals_open3d(p)
-    print("Normals shape: ", n.shape)
+#    print("Normals shape: ", n.shape)
     
     # Finding nearest neighbors
     x = find_nearest_neighbors(p)
@@ -146,7 +146,7 @@ def calculate_normals(points):
     return normal_vector
 
 def find_nearest_neighbors(points):
-    print("Finding nearest neighbors...")
+#    print("Finding nearest neighbors...")
     # Assuming points has shape [batch_size, num_points, 3]
     # Finding nearest neighbors using Euclidean distance
     distances = torch.sum((points.unsqueeze(2) - points.unsqueeze(1)) ** 2, dim=-1)
@@ -158,7 +158,7 @@ def find_nearest_neighbors(points):
     return x
 
 def calculate_principal_curvatures(points):
-    print("Calculating principal curvatures...")
+#    print("Calculating principal curvatures...")
     # Assuming points has shape [batch_size, num_points, 3]
     # Assuming a local window around each point for the quadratic surface fitting
     # Implement your own code for quadratic surface fitting and principal curvature calculation
