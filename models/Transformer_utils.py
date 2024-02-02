@@ -58,17 +58,30 @@ def transform_pointcloud(pointcloud):
 def calculate_normals_open3d(points):
     #print("Calculating normals...")
     # Assuming points has shape [batch_size, num_points, 3]
- 
-    # Create an Open3D point cloud
-    pcd = o3d.geometry.PointCloud()
-    pcd.points = o3d.utility.Vector3dVector(points)
 
-    # Estimate normals
-    pcd.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.1, max_nn=30))
+    pointcloud_tensor = points
+    pointcloud_np = pointcloud_tensor.numpy()
 
-    # Extract normals
-    normals = np.asarray(pcd.normals)
-    normals_tensor = torch.from_numpy(normals)
+    # Initialize an empty tensor for storing normals
+    normals_tensor = torch.zeros_like(pointcloud_tensor)
+
+    # Loop through each point cloud
+    for i in range(pointcloud_tensor.shape[0]):
+        # Step 1: Convert pointcloud to open3d pointcloud
+        o3d_pointcloud = o3d.geometry.PointCloud()
+        o3d_pointcloud.points = o3d.utility.Vector3dVector(pointcloud_np[i])
+
+        # Step 2: Calculate normals using open3d
+        o3d.geometry.estimate_normals(
+            o3d_pointcloud,
+            search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.1, max_nn=30)
+        )
+
+        # Step 3: Extract the normals
+        normals_np = np.asarray(o3d_pointcloud.normals)
+
+        # Store normals in the tensor
+        normals_tensor[i] = torch.from_numpy(normals_np)
 
     return normals_tensor
 
