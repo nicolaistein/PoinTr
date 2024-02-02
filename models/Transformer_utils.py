@@ -59,11 +59,11 @@ def calculate_normals_open3d(points):
     #print("Calculating normals...")
     # Assuming points has shape [batch_size, num_points, 3]
 
-    pointcloud_tensor = points
+    pointcloud_tensor = points.cpu()
     pointcloud_np = pointcloud_tensor.numpy()
 
     # Initialize an empty tensor for storing normals
-    normals_tensor = torch.zeros_like(pointcloud_tensor)
+    normals_tensor = torch.zeros_like(pointcloud_tensor, device='cuda:0')
 
     # Loop through each point cloud
     for i in range(pointcloud_tensor.shape[0]):
@@ -82,6 +82,7 @@ def calculate_normals_open3d(points):
 
         # Store normals in the tensor
         normals_tensor[i] = torch.from_numpy(normals_np)
+
 
     return normals_tensor
 
