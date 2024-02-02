@@ -637,6 +637,10 @@ class GeomGCNN_Grouper(nn.Module):
 
         print("transformed shape: ", transformed.shape)
 
+        transformed = transformed.transpose(-1, -2).contiguous()
+
+        print("transformed shape transposed: ", transformed.shape)
+
 
         x = x.transpose(-1, -2).contiguous()
 
