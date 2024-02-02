@@ -26,20 +26,20 @@ def transform_pointcloud(pointcloud):
     
     # Calculating normal vectors
     n = calculate_normals(p)
-    print("Normals shape: ", n.shape)
+    #print("Normals shape: ", n.shape)
     
     # Finding nearest neighbors
     x = find_nearest_neighbors(p)
-    print("Nearest neighbors shape: ", x.shape)
+    #print("Nearest neighbors shape: ", x.shape)
 
     alpha = torch.sqrt(torch.sum((x - p) ** 2, dim=-1) - torch.sum(n * (x - p), dim=-1) ** 2)
-    print("Alpha shape: ", alpha.shape)
+    #print("Alpha shape: ", alpha.shape)
     alpha = alpha.unsqueeze(-1)
-    print("Alpha shape unsqueezed: ", alpha.shape)
+    #print("Alpha shape unsqueezed: ", alpha.shape)
 
     beta = torch.sum(n * (x - p), dim=-1).unsqueeze(-1)
 
-    print("Beta shape: ", beta.shape)
+    #print("Beta shape: ", beta.shape)
     
     # Computing the 9-dimensional transformation
     transformed_points = torch.cat([
@@ -53,27 +53,26 @@ def transform_pointcloud(pointcloud):
     return transformed_points
 
 def calculate_normals(points):
-    print("Calculating normals...")
+    #print("Calculating normals...")
     pointclouds = points
-    k_neighbors = 20
-
+    k_neighbors = 4
 
     batch_size, num_points, _ = pointclouds.size()
 
     # Use the cdist function to calculate pairwise distances
     pairwise_distances = torch.cdist(pointclouds, pointclouds)
-    print("Pairwise distances shape: ", pairwise_distances.shape)
+    #print("Pairwise distances shape: ", pairwise_distances.shape)
 
     # Get the indices of the k-nearest neighbors for each point
     _, indices = torch.topk(pairwise_distances, k=k_neighbors, dim=-1, largest=False)
-    print("Indices shape: ", indices.shape) # [batch_size, num_points, k_neighbors, 3]
+    #print("Indices shape: ", indices.shape) # [batch_size, num_points, k_neighbors, 3]
 
     ################# FINE UNTIL HERE #################
 
         # Extract the coordinates of the neighboring points
     neighbor_points = torch.gather(pointclouds.unsqueeze(2).expand(-1, -1, k_neighbors, -1),
                                    1, indices.unsqueeze(-1).expand(-1, -1, -1, 3))
-    print("Neighbor points shape: ", neighbor_points.shape)
+    #print("Neighbor points shape: ", neighbor_points.shape)
 
 
     # Assuming your input tensor is named 'neighbors_tensor'
@@ -81,24 +80,29 @@ def calculate_normals(points):
 
     # 1. Compute the centroid of the point's neighbors
     centroid = torch.mean(neighbor_points, dim=2, keepdim=True)
-    print("Centroid shape: ", centroid.shape)
+    #print("Centroid shape: ", centroid.shape)
 
     # 2. Compute the covariance matrix of the point's neighbors with respect to the centroid
     centered_neighbors = neighbor_points - centroid
-    print("Centered neighbors shape: ", centered_neighbors.shape)
+    #print("Centered neighbors shape: ", centered_neighbors.shape)
     covariance_matrix = torch.matmul(centered_neighbors.transpose(-1, -2), centered_neighbors)
-    print("Covariance matrix shape 1: ", covariance_matrix.shape)
+    #print("Covariance matrix shape 1: ", covariance_matrix.shape)
     covariance_matrix /= k_neighbors
-    print("Covariance matrix shape 2: ", covariance_matrix.shape)
+    #print("Covariance matrix shape 2: ", covariance_matrix.shape)
 
     # 3. Find the eigenvectors and eigenvalues of the covariance matrix
     eigenvalues, eigenvectors = torch.symeig(covariance_matrix, eigenvectors=True)
-    print("Eigenvalues shape: ", eigenvalues.shape)
-    print("Eigenvectors shape: ", eigenvectors.shape)
+    #print("Eigenvalues shape: ", eigenvalues.shape)
+    #print("Eigenvectors shape: ", eigenvectors.shape)
 
     # 4. Choose the eigenvector corresponding to the smallest eigenvalue as the normal vector
     normal_vector = eigenvectors[:, :, :, 0]  # Assuming the smallest eigenvalue is at index 0
-    print("Normals shape: ", normal_vector.shape)
+    print("Normal vector shape: ", normal_vector.shape)
+    print("Normal vector test 1: ", eigenvectors[0, 0, 0, :])
+    print("Normal vector test 2: ", eigenvectors[0, 0, 1, :])
+    print("Normal vector test 3: ", eigenvectors[0, 0, 2, :])
+    print("Normal vector test 4: ", eigenvectors[0, 0, 3, :])
+    #print("Normals shape: ", normal_vector.shape)
 
     return normal_vector
 

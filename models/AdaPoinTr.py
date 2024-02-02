@@ -635,6 +635,8 @@ class GeomGCNN_Grouper(nn.Module):
 
         transformed = transform_pointcloud(x)
 
+        
+
         print("transformed shape: ", transformed.shape)
 
         transformed = transformed.transpose(-1, -2).contiguous()
