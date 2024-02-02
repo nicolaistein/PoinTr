@@ -33,7 +33,10 @@ class IO:
         print("ptcloud.shape: ", ptcloud.shape)
         normals = np.array(pc.normals)
         print("normals.shape: ", normals.shape)
-        return ptcloud, normals
+        result_array = np.concatenate((ptcloud, normals), axis=1)
+        print("result_array.shape: ", result_array.shape)
+        return result_array
+    #    return ptcloud, normals
         return ptcloud
 
     @classmethod

@@ -101,8 +101,8 @@ class PCN(data.Dataset):
 
             points, normals = IO.get(file_path)
             data[ri] = points.astype(np.float32)
-            if ri == 'partial':
-                data['normal'] = normals.astype(np.float32)
+    #        if ri == 'partial':
+    #            data['normal'] = normals.astype(np.float32)
 
             print("PCNDatasetv2.py: data[ri].shape: ", data[ri].shape)
 
@@ -115,7 +115,8 @@ class PCN(data.Dataset):
         print("Data partial: ", data['partial'].shape)
         print("Data gt: ", data['gt'].shape)
 
-        return sample['taxonomy_id'], sample['model_id'], (data['partial'], data['gt'], data['normal'])
+    #    return sample['taxonomy_id'], sample['model_id'], (data['partial'], data['gt'], data['normal'])
+        return sample['taxonomy_id'], sample['model_id'], (data['partial'], data['gt'])
 
     def __len__(self):
         return len(self.file_list)
