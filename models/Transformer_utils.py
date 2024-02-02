@@ -31,13 +31,19 @@ def transform_pointcloud(pointcloud):
     # Finding nearest neighbors
     x = find_nearest_neighbors(p)
     print("Nearest neighbors shape: ", x.shape)
+
+    alpha = torch.sqrt(torch.sum((x - p) ** 2, dim=-1) - torch.sum(n * (x - p), dim=-1) ** 2)
+    beta = n * (x - p)
+
+    print("Alpha shape: ", alpha.shape)
+    print("Beta shape: ", beta.shape)
     
     # Computing the 9-dimensional transformation
     transformed_points = torch.cat([
         p,
         n,
-        torch.sqrt(torch.sum((x - p) ** 2, dim=-1) - torch.sum(n * (x - p), dim=-1) ** 2),
-        n * (x - p),
+        alpha,
+        beta,
     #    calculate_principal_curvatures(p)
     ], dim=-1)
     
