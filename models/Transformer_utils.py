@@ -57,30 +57,35 @@ def calculate_normals(points):
 
     # Get the indices of the k-nearest neighbors for each point
     _, indices = torch.topk(pairwise_distances, k=k_neighbors, dim=-1, largest=False)
-    print("Indices shape: ", indices.shape)
+    print("Indices shape: ", indices.shape) # [batch_size, num_points, k_neighbors, 3]
 
-    # Extract the coordinates of the neighboring points
-    neighbor_points = torch.gather(pointclouds.unsqueeze(2).expand(-1, -1, k_neighbors, -1),
-                                   1, indices.unsqueeze(-1).expand(-1, -1, -1, 3))
-    print("Neighbor points shape: ", neighbor_points.shape)
+    ################# FINE UNTIL HERE #################
 
-    # Calculate the local coordinate system for each point
-    centered_neighbor_points = neighbor_points - pointclouds.unsqueeze(2).unsqueeze(-1).expand(-1, -1, k_neighbors, 3)
-    
-    print("Centered neighbor points shape: ", centered_neighbor_points.shape)
-    cov_matrix = torch.bmm(centered_neighbor_points.transpose(2, 3), centered_neighbor_points)
-    print("Covariance matrix shape: ", cov_matrix.shape)
+    # Assuming your input tensor is named 'neighbors_tensor'
+    # neighbors_tensor shape: [batch_size, num_points, k_neighbors, 3]
 
-    # Use SVD to compute the normal vectors
-    _, _, v = torch.svd(cov_matrix)
-    normals = v[:, :, :, 0].transpose(1, 2)
-    print("Normals shape: ", normals.shape)
+    # 1. Compute the centroid of the point's neighbors
+    centroid = torch.mean(indices, dim=2, keepdim=True)
+    print("Centroid shape: ", centroid.shape)
 
-    # Make sure the normals are unit vectors
-    normals = F.normalize(normals, p=2, dim=2)
-    print("Normals shape: ", normals.shape)
+    # 2. Compute the covariance matrix of the point's neighbors with respect to the centroid
+    centered_neighbors = indices - centroid
+    print("Centered neighbors shape: ", centered_neighbors.shape)
+    covariance_matrix = torch.matmul(centered_neighbors.transpose(-1, -2), centered_neighbors)
+    print("Covariance matrix shape 1: ", covariance_matrix.shape)
+    covariance_matrix /= k_neighbors
+    print("Covariance matrix shape 2: ", covariance_matrix.shape)
 
-    return normals
+    # 3. Find the eigenvectors and eigenvalues of the covariance matrix
+    eigenvalues, eigenvectors = torch.symeig(covariance_matrix, eigenvectors=True)
+    print("Eigenvalues shape: ", eigenvalues.shape)
+    print("Eigenvectors shape: ", eigenvectors.shape)
+
+    # 4. Choose the eigenvector corresponding to the smallest eigenvalue as the normal vector
+    normal_vector = eigenvectors[:, :, :, 0]  # Assuming the smallest eigenvalue is at index 0
+    print("Normals shape: ", normal_vector.shape)
+
+    return normal_vector
 
 def find_nearest_neighbors(points):
     print("Finding nearest neighbors...")
