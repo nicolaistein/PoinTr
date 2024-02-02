@@ -61,15 +61,21 @@ def calculate_normals(points):
 
     ################# FINE UNTIL HERE #################
 
+        # Extract the coordinates of the neighboring points
+    neighbor_points = torch.gather(pointclouds.unsqueeze(2).expand(-1, -1, k_neighbors, -1),
+                                   1, indices.unsqueeze(-1).expand(-1, -1, -1, 3))
+    print("Neighbor points shape: ", neighbor_points.shape)
+
+
     # Assuming your input tensor is named 'neighbors_tensor'
     # neighbors_tensor shape: [batch_size, num_points, k_neighbors, 3]
 
     # 1. Compute the centroid of the point's neighbors
-    centroid = torch.mean(indices, dim=2, keepdim=True)
+    centroid = torch.mean(neighbor_points, dim=2, keepdim=True)
     print("Centroid shape: ", centroid.shape)
 
     # 2. Compute the covariance matrix of the point's neighbors with respect to the centroid
-    centered_neighbors = indices - centroid
+    centered_neighbors = neighbor_points - centroid
     print("Centered neighbors shape: ", centered_neighbors.shape)
     covariance_matrix = torch.matmul(centered_neighbors.transpose(-1, -2), centered_neighbors)
     print("Covariance matrix shape 1: ", covariance_matrix.shape)
