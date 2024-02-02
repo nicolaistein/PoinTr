@@ -72,9 +72,8 @@ def calculate_normals_open3d(points):
         o3d_pointcloud.points = o3d.utility.Vector3dVector(pointcloud_np[i])
 
         # Step 2: Calculate normals using open3d
-        o3d.geometry.estimate_normals(
-            o3d_pointcloud,
-            search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.1, max_nn=30)
+        o3d_pointcloud.estimate_normals(
+     #       search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.1, max_nn=30)
         )
 
         # Step 3: Extract the normals
