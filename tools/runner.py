@@ -97,11 +97,11 @@ def run_net(args, config, train_writer=None, val_writer=None):
             if dataset_name == 'PCN' or dataset_name == 'Completion3D' or dataset_name == 'Projected_ShapeNet':
                 partial = data[0].cuda()
                 gt = data[1].cuda()
-                normal = data[2].cuda()
+           #     normal = data[2].cuda()
 
-                print("runner partial.shape: ", partial.shape)
-                print("runner gt.shape: ", gt.shape)
-                print("runner normal.shape: ", normal.shape)
+            #    print("runner partial.shape: ", partial.shape)
+            #    print("runner gt.shape: ", gt.shape)
+            #    print("runner normal.shape: ", normal.shape)
                 if config.dataset.train._base_.CARS:
                     if idx == 0:
                         print_log('padding while KITTI training', logger=logger)
