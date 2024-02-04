@@ -84,7 +84,7 @@ def calculate_principal_curvatures(points):
 
 ########################################################################################################################
 
-def get_neighborhood(nsample, xyz, new_xyz):
+def get_neighborhood2(nsample, xyz, new_xyz):
     """
     Calculate the neighborhood for each point
     1. Calculate the sorted knn for each point
@@ -147,6 +147,13 @@ def get_neighborhood(nsample, xyz, new_xyz):
     # Reshape and return the result
     return indices.view(B, S, nsample)
 
+def get_neighborhood(nsample, xyz, new_xyz):
+    if nsample > 25:
+        print("Calculating knn, nsample =", nsample)
+        return knn_point(nsample, xyz, new_xyz)
+    else:
+        print("Calculating neighborhood, nsample =", nsample)
+        return get_neighborhood_old(nsample, xyz, new_xyz)
 
 
 def get_neighborhood_old(nsample, xyz, new_xyz):
@@ -165,7 +172,6 @@ def get_neighborhood_old(nsample, xyz, new_xyz):
         group_idx: grouped points index, [B, S, nsample]
     """
 
-    print("Calculating neighborhood...")
 
     lamda = 1.25
     theta = torch.pi / 6
@@ -180,7 +186,6 @@ def get_neighborhood_old(nsample, xyz, new_xyz):
     group_idx_new = torch.zeros((B, S, nsample), dtype=torch.long, device=xyz.device)
 
     for b in range(B):
-        print("Calculating neighborhood for batch", b + 1, "of", B, ", nsample =", nsample)
     
         for s in range(S):
 
