@@ -579,7 +579,7 @@ class GeomGCNN_Grouper(nn.Module):
 
         with torch.no_grad():
             # _, idx = self.knn(coor_k, coor_q)  # bs k np
-            idx = get_neighborhood_old(k, coor_k.transpose(-1, -2).contiguous(), coor_q.transpose(-1, -2).contiguous()) # B G M
+            idx = get_neighborhood(k, coor_k.transpose(-1, -2).contiguous(), coor_q.transpose(-1, -2).contiguous()) # B G M
 
             # idx: [bs, np, k]      [16, 256, 16]
 
