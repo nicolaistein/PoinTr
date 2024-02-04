@@ -139,6 +139,10 @@ def get_neighborhood(nsample, xyz, new_xyz):
                 print("Vec A: ", vec_a.shape)
                 print("Vec B: ", vec_b.shape)
 
+                vec_a = vec_a.unsqueeze(0).expand(vec_b.shape[0], -1)
+
+                print("Vec A new: ", vec_a.shape)
+
                 angles = torch.atan2(torch.cross(vec_a, vec_b, dim=-1).norm(dim=-1), torch.dot(vec_a, vec_b, dim=-1))
                 distances = torch.norm(candidate_points - s_coords, dim=-1)
 
