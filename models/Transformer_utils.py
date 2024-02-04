@@ -99,7 +99,7 @@ def get_neighborhood(nsample, xyz, new_xyz):
     Return:
         group_idx: grouped points index, [B, S, nsample]
     """
-    
+
     lamda = 1.25
     theta = torch.pi / 6
 
@@ -165,6 +165,8 @@ def get_neighborhood_old(nsample, xyz, new_xyz):
         group_idx: grouped points index, [B, S, nsample]
     """
 
+    print("Calculating neighborhood...")
+
     lamda = 1.25
     theta = torch.pi / 6
 
@@ -178,6 +180,8 @@ def get_neighborhood_old(nsample, xyz, new_xyz):
     group_idx_new = torch.zeros((B, S, nsample), dtype=torch.long, device=xyz.device)
 
     for b in range(B):
+        print("Calculating neighborhood for batch", b + 1, "of", B, ", nsample =", nsample)
+    
         for s in range(S):
 
             s_coords = new_xyz[b, s, :]
