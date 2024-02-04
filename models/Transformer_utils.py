@@ -148,11 +148,11 @@ def get_neighborhood2(nsample, xyz, new_xyz):
     return indices.view(B, S, nsample)
 
 def get_neighborhood(nsample, xyz, new_xyz):
-    if nsample > 20:
-        print("Calculating knn, nsample =", nsample)
+    if nsample > 20 or xyz.shape[1] > 200:
+        print("Calculating knn, nsample =", nsample, " points =", xyz.shape[1])
         return knn_point(nsample, xyz, new_xyz)
     else:
-        print("Calculating neighborhood, nsample =", nsample)
+        print("Calculating neighborhood, nsample =", nsample, " points =", xyz.shape[1])
         return get_neighborhood_old(nsample, xyz, new_xyz)
 
 def get_neighborhood_new2(nsample, xyz, new_xyz):
@@ -335,10 +335,10 @@ def get_neighborhood_old(nsample, xyz, new_xyz):
     group_idx_new = torch.zeros((B, S, nsample), dtype=torch.long, device=xyz.device)
 
     for b in range(B):
-        print("Calculating neighborhood, batch", b+1, "of", B, " S =", S)
+   #     print("Calculating neighborhood, batch", b+1, "of", B, " S =", S)
     
         for s in range(S):
-            print("Calculating s, batch", b+1, "/", B, ", s: ", s, " / ", S)
+    #        print("Calculating s, batch", b+1, "/", B, ", s: ", s, " / ", S)
 
             s_coords = new_xyz[b, s, :]
 
@@ -352,7 +352,7 @@ def get_neighborhood_old(nsample, xyz, new_xyz):
 
             while idx_count < nsample:
 
-                print("Calculating idx_count ", idx_count, " / ", nsample)
+        #        print("Calculating idx_count ", idx_count, " / ", nsample)
 
                 # Nearest neighbor of s coords
                 selected_point = xyz[b, selected_idx, :]
