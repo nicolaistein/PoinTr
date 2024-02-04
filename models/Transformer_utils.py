@@ -85,6 +85,56 @@ def calculate_principal_curvatures(points):
 ########################################################################################################################
 
 def get_neighborhood(nsample, xyz, new_xyz):
+    lamda = 1.25
+    theta = torch.pi / 6
+
+    # Calculate knn for each point
+    sqrdists = square_distance(new_xyz, xyz)
+    _, group_idx = torch.topk(sqrdists, xyz.shape[1], dim=-1, largest=False, sorted=True)
+
+    B, S, _ = new_xyz.size()
+    _, nsample, _ = group_idx.size()
+
+    # Expand dimensions to enable broadcasting
+    new_xyz_expanded = new_xyz.unsqueeze(2)  # [B, S, 1, C]
+    xyz_expanded = xyz.unsqueeze(1)           # [B, 1, N, C]
+
+    # Calculate vectors
+    vec_a = new_xyz_expanded - xyz_expanded   # [B, S, N, C]
+    selected_point = torch.gather(xyz_expanded, 2, group_idx.unsqueeze(-1).expand(-1, -1, -1, xyz.size(-1)))
+    vec_b = selected_point - new_xyz_expanded  # [B, S, N, C]
+
+    # Calculate dot product, cross product, angles, and distances
+    dot = torch.sum(vec_a * vec_b, dim=-1)    # [B, S, N]
+    cross = torch.cross(vec_a, vec_b, dim=-1).norm(dim=-1)  # [B, S, N]
+    angles = torch.atan2(cross, dot)           # [B, S, N]
+    distances = torch.norm(vec_b, dim=-1)      # [B, S, N]
+
+    # Create masks
+    mask_angle = angles > theta
+    mask_distance = distances > lamda * torch.norm(selected_point - new_xyz_expanded, dim=-1)
+
+    # Combine masks
+    mask = mask_angle | mask_distance
+
+    # Create indices for selection
+    indices = torch.arange(group_idx.size(-1), device=group_idx.device)
+    indices_expanded = indices.unsqueeze(0).unsqueeze(0).expand(B, S, -1)
+
+    # Set masked indices to maximum value to discard them during sorting
+    sqrdists[mask] = float('inf')
+
+    # Sort distances and get indices
+    _, sorted_idx = torch.topk(sqrdists, nsample, dim=-1, largest=False, sorted=True)
+
+    # Gather the corresponding indices from the sorted distances
+    group_idx_new = torch.gather(group_idx, 2, sorted_idx)
+
+    return group_idx_new
+
+
+
+def get_neighborhood_old(nsample, xyz, new_xyz):
     """
     Calculate the neighborhood for each point
     1. Calculate the sorted knn for each point
@@ -125,16 +175,7 @@ def get_neighborhood(nsample, xyz, new_xyz):
             selected_idx = idx[0]
             idx_count = 1
 
-    #        if idx.shape[0] == nsample:
-    #            group_idx_new[b, s, :] = idx[:nsample]
-    #            continue
-
             while idx_count < nsample:
-
-    #            print("Current idx length: ", idx.shape)
-
-    #            print("Idx count: ", idx_count)
-    #            print("nsample: ", nsample)
 
                 # Nearest neighbor of s coords
                 selected_point = xyz[b, selected_idx, :]
@@ -146,18 +187,12 @@ def get_neighborhood(nsample, xyz, new_xyz):
                 vec_a = selected_point - s_coords
                 vec_b = candidate_points - s_coords
 
-    #            print("Vec A: ", vec_a.shape)
-    #            print("Vec B: ", vec_b.shape)
 
                 vec_a = vec_a.unsqueeze(0).expand(vec_b.shape[0], -1)
-
-    #            print("Vec A new: ", vec_a.shape)
 
                 dot = torch.sum(vec_a * vec_b, dim=-1)
                 cross = torch.cross(vec_a, vec_b, dim=-1).norm(dim=-1)
 
-    #            print("Dot: ", dot.shape)
-    #            print("Cross: ", cross.shape)
 
                 angles = torch.atan2(cross, dot)
                 distances = torch.norm(candidate_points - s_coords, dim=-1)
@@ -170,19 +205,12 @@ def get_neighborhood(nsample, xyz, new_xyz):
                     selected_idx = idx[idx_count]
                     idx[idx_count-1] = selected_idx
 
-     #           print("Mask: ", mask.shape)
-
                 ones_needed = idx.shape[0] - mask.shape[0]
                 ones = torch.ones(ones_needed, dtype=torch.bool, device=mask.device)
                 mask = torch.cat([ones, mask])
 
                 num_zeros = len(mask) - torch.count_nonzero(mask)
                 allowed_zeros = idx.shape[0] - nsample
-    #            print("Allowed zeros: ", allowed_zeros)
-    #            print("Num zeros: ", num_zeros)
-
-     #           print("Mask after: ", mask.shape)
-     #           print("Idx: ", idx.shape)
 
                 counter = 0
                 while num_zeros > allowed_zeros: 
@@ -196,68 +224,6 @@ def get_neighborhood(nsample, xyz, new_xyz):
             group_idx_new[b, s, :] = idx[:nsample]
 
     return group_idx_new
-
-
-def get_neighborhood_old(nsample, xyz, new_xyz):
-    """
-    Calculate the neighborhood for each point
-    1. Calculate the sorted knn for each point
-    2. Greedily select points in the neighborhood of each point x as follows:
-        (1) Select the point y with the smallest distance
-        (2) Remove all points in the region within an angle theta from the line y-x with origin at x that have a distance less than lamda * |x-y|
-        (3) Repeat steps (1) and (2) until you have nsample neighbor points for x
-    Input:
-        nsample: max sample number in local region
-        xyz: all points, [B, N, C]
-        new_xyz: query points, [B, S, C]
-    Return:
-        group_idx: grouped points index, [B, S, nsample]
-    """
-
-    lamda = 1.25
-    theta = torch.pi / 6
-
-    # Calculate knn for each point
-    sqrdists = square_distance(new_xyz, xyz)
-    _, group_idx = torch.topk(sqrdists, nsample*4, dim=-1, largest=False, sorted=True)
-
-    # YOUR CODE HERE #
-
-    B, S, _ = new_xyz.shape
-
-    # Greedily select points in the neighborhood
-    group_idx_list = []
-    for b in range(B):
-        group_idx_b = []
-        for s in range(S):
-            idx = group_idx[b, s]
-
-            # Select the point y with the smallest distance
-            y = xyz[b, idx[0]]
-
-
-
-            # Remove points based on angle theta and distance lambda
-            mask = torch.ones_like(idx, dtype=torch.bool)
-            for i in range(1, nsample):
-                x = xyz[b, idx[i]]
-
-                # Calculate the angle between vectors y-x and x-axis
-                angle = torch.atan2(x[1] - y[1], x[0] - y[0])
-
-                # Remove points within the specified angle and distance
-                mask[i:] = mask[i:] & ((torch.abs(angle) > theta) | (torch.norm(x - y, dim=-1) < lamda * torch.norm(y, dim=-1)))
-
-
-
-
-            group_idx_b.append(idx[mask])
-
-        group_idx_list.append(group_idx_b)
-
-    group_idx = torch.stack([torch.stack(group_idx_b) for group_idx_b in group_idx_list], dim=0)
-
-    return group_idx
 
 
 
