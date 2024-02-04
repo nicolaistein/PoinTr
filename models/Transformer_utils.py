@@ -143,7 +143,13 @@ def get_neighborhood(nsample, xyz, new_xyz):
 
                 print("Vec A new: ", vec_a.shape)
 
-                angles = torch.atan2(torch.cross(vec_a, vec_b, dim=-1).norm(dim=-1), torch.dot(vec_a, vec_b))
+                dot = torch.sum(vec_a * vec_b, dim=-1)
+                cross = torch.cross(vec_a, vec_b, dim=-1).norm(dim=-1)
+
+                print("Dot: ", dot.shape)
+                print("Cross: ", cross.shape)
+
+                angles = torch.atan2(cross, dot)
                 distances = torch.norm(candidate_points - s_coords, dim=-1)
 
                 # Remove points in the region within an angle theta from the line y-x
