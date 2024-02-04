@@ -160,6 +160,8 @@ def get_neighborhood(nsample, xyz, new_xyz):
                     selected_idx = idx[idx_count]
                     idx[idx_count-1] = selected_idx
 
+                print("Mask: ", mask.shape)
+                print("Idx: ", idx.shape)
                 idx = idx[mask]
 
             group_idx_new[b, s, :] = idx[:nsample]
