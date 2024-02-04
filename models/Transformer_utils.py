@@ -338,7 +338,7 @@ def get_neighborhood_old(nsample, xyz, new_xyz):
         print("Calculating neighborhood, batch", b+1, "of", B, " S =", S)
     
         for s in range(S):
-    #        print("Calculating s, batch", b+1, "/", B, ", s: ", s, " / ", S)
+            print("Calculating s, batch", b+1, "/", B, ", s: ", s, " / ", S)
 
             s_coords = new_xyz[b, s, :]
 
@@ -352,7 +352,7 @@ def get_neighborhood_old(nsample, xyz, new_xyz):
 
             while idx_count < nsample:
 
-            #    print("Calculating idx_count", idx_count, " / ", nsample)
+                print("Calculating idx_count ", idx_count, " / ", nsample)
 
                 # Nearest neighbor of s coords
                 selected_point = xyz[b, selected_idx, :]
