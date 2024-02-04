@@ -21,30 +21,15 @@ import numpy as np
 
 def transform_pointcloud(pointcloud):
 
-    # Extracting coordinates of points
-    #p = pointcloud[:, :, :3]
     p = pointcloud
-#    print("Points shape: ", p.shape)
-    
-    # Calculating normal vectors
     n = calculate_normals_open3d(p)
-#    print("Normals shape: ", n.shape)
-    
-    # Finding nearest neighbors
     x = find_nearest_neighbors(p)
-    #print("Nearest neighbors shape: ", x.shape)
 
     alpha = torch.sqrt(torch.sum((x - p) ** 2, dim=-1) - torch.sum(n * (x - p), dim=-1) ** 2)
-    #print("Alpha shape: ", alpha.shape)
-
     alpha = alpha.unsqueeze(-1)
-    #print("Alpha shape unsqueezed: ", alpha.shape)
 
     beta = torch.sum(n * (x - p), dim=-1).unsqueeze(-1)
 
-    #print("Beta shape: ", beta.shape)
-    
-    # Computing the 9-dimensional transformation
     transformed_points = torch.cat([
         p,
         n,
@@ -56,99 +41,25 @@ def transform_pointcloud(pointcloud):
     return transformed_points
 
 def calculate_normals_open3d(points):
-    #print("Calculating normals...")
-    # Assuming points has shape [batch_size, num_points, 3]
 
     pointcloud_tensor = points.cpu()
     pointcloud_np = pointcloud_tensor.numpy()
 
-    # Initialize an empty tensor for storing normals
     normals_tensor = torch.zeros_like(pointcloud_tensor, device='cuda:0')
 
-    # Loop through each point cloud
     for i in range(pointcloud_tensor.shape[0]):
-        # Step 1: Convert pointcloud to open3d pointcloud
         o3d_pointcloud = o3d.geometry.PointCloud()
         o3d_pointcloud.points = o3d.utility.Vector3dVector(pointcloud_np[i])
+        o3d_pointcloud.estimate_normals()
 
-        # Step 2: Calculate normals using open3d
-        o3d_pointcloud.estimate_normals(
-     #       search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.1, max_nn=30)
-        )
-
-        # Step 3: Extract the normals
         normals_np = np.asarray(o3d_pointcloud.normals)
 
-        # Store normals in the tensor
         normals_tensor[i] = torch.from_numpy(normals_np)
 
 
     return normals_tensor
 
-def calculate_normals(points):
-    #print("Calculating normals...")
-    pointclouds = points
-    k_neighbors = 3
-
-    batch_size, num_points, _ = pointclouds.size()
-
-    # Use the cdist function to calculate pairwise distances
-    pairwise_distances = torch.cdist(pointclouds, pointclouds)
-    #print("Pairwise distances shape: ", pairwise_distances.shape)
-
-    # Get the indices of the k-nearest neighbors for each point
-    _, indices = torch.topk(pairwise_distances, k=k_neighbors, dim=-1, largest=False)
-    #print("Indices shape: ", indices.shape) # [batch_size, num_points, k_neighbors, 3]
-
-    ################# FINE UNTIL HERE #################
-
-        # Extract the coordinates of the neighboring points
-    neighbor_points = torch.gather(pointclouds.unsqueeze(2).expand(-1, -1, k_neighbors, -1),
-                                   1, indices.unsqueeze(-1).expand(-1, -1, -1, 3))
-    #print("Neighbor points shape: ", neighbor_points.shape)
-
-
-    # Assuming your input tensor is named 'neighbors_tensor'
-    # neighbors_tensor shape: [batch_size, num_points, k_neighbors, 3]
-
-    # 1. Compute the centroid of the point's neighbors
-    centroid = torch.mean(neighbor_points, dim=2, keepdim=True)
-    #print("Centroid shape: ", centroid.shape)
-
-    # 2. Compute the covariance matrix of the point's neighbors with respect to the centroid
-    centered_neighbors = neighbor_points - centroid
-    #print("Centered neighbors shape: ", centered_neighbors.shape)
-    covariance_matrix = torch.matmul(centered_neighbors.transpose(-1, -2), centered_neighbors)
-    #print("Covariance matrix shape 1: ", covariance_matrix.shape)
-    covariance_matrix /= k_neighbors
-    #print("Covariance matrix shape 2: ", covariance_matrix.shape)
-
-    # 3. Find the eigenvectors and eigenvalues of the covariance matrix
-    eigenvalues, eigenvectors = torch.symeig(covariance_matrix, eigenvectors=True)
-    #print("Eigenvalues shape: ", eigenvalues.shape)
-    #print("Eigenvectors shape: ", eigenvectors.shape)
-
-    # Find the index of the smallest eigenvalue
-    min_eigenvalue_index = torch.argmin(eigenvalues)
-
-
-    # 4. Choose the eigenvector corresponding to the smallest eigenvalue as the normal vector
-    #normal_vector = eigenvectors[:, :, :, 0]  # Assuming the smallest eigenvalue is at index 0
-    # Extract the corresponding eigenvector
-    normal_vector = eigenvectors[:, :, :, min_eigenvalue_index]
-
-    #print("Test point 1: ", pointclouds[0, 0, :])
-    #print("Normal vector shape: ", normal_vector.shape)
-    #print("Normal vector test 1: ", eigenvectors[0, 0, :, :])
-    #print("Eigenvalues test 1: ", eigenvalues[0, 0, :, :])
-    #print("Normals shape: ", normal_vector.shape)
-
-    return normal_vector
-
 def find_nearest_neighbors(points):
-#    print("Finding nearest neighbors...")
-    # Assuming points has shape [batch_size, num_points, 3]
-    # Finding nearest neighbors using Euclidean distance
     distances = torch.sum((points.unsqueeze(2) - points.unsqueeze(1)) ** 2, dim=-1)
     _, indices = torch.topk(distances, k=2, dim=-1, largest=False)
     
@@ -161,7 +72,7 @@ def calculate_principal_curvatures(points):
 #    print("Calculating principal curvatures...")
     # Assuming points has shape [batch_size, num_points, 3]
     # Assuming a local window around each point for the quadratic surface fitting
-    # Implement your own code for quadratic surface fitting and principal curvature calculation
+    # TODO: Implement the actual principal curvature calculation
     # ...
     # Placeholder for demonstration purposes (replace with actual implementation)
     k, s = torch.randn_like(points[:, :, :2]), torch.randn_like(points[:, :, :2])
@@ -172,6 +83,137 @@ def calculate_principal_curvatures(points):
 
 
 ########################################################################################################################
+
+def get_neighborhood(nsample, xyz, new_xyz):
+    """
+    Calculate the neighborhood for each point
+    1. Calculate the sorted knn for each point
+    2. Greedily select points in the neighborhood of each point x as follows:
+        (1) Select the point y with the smallest distance
+        (2) Remove all points in the region within an angle theta from the line y-x that have a distance less than lamda * |x-y|
+        (3) Repeat steps (1) and (2) until you have nsample neighbor points for x
+    Input:
+        nsample: max sample number in local region
+        xyz: all points, [B, N, C]
+        new_xyz: query points, [B, S, C]
+    Return:
+        group_idx: grouped points index, [B, S, nsample]
+    """
+
+    lamda = 1.25
+    theta = torch.pi / 6
+
+    # Calculate knn for each point
+    sqrdists = square_distance(new_xyz, xyz)
+    _, group_idx = torch.topk(sqrdists, xyz.shape[1], dim=-1, largest=False, sorted=True)
+
+    B, S, _ = new_xyz.size()
+    _, nsample, _ = group_idx.size()
+
+    group_idx_new = torch.zeros((B, S, nsample), dtype=torch.long, device=xyz.device)
+
+    for b in range(B):
+        for s in range(S):
+
+            s_coords = new_xyz[b, s, :]
+
+            # Nearest neighbors of s index
+            idx = group_idx[b, s, :]
+            # Select the point y with the smallest distance
+
+            # Nearest neighbor of s index
+            selected_idx = idx[0]
+            idx_count = 1
+
+            while idx_count < nsample:
+                # Nearest neighbor of s coords
+                selected_point = xyz[b, selected_idx, :]
+
+                # Neighbor coords of s from [idx_count, ..., length(idx)]
+                candidate_points = xyz[b, idx[idx_count:], :]
+
+                # Calculate angle and distance
+                vec_a = selected_point - s_coords
+                vec_b = candidate_points - s_coords
+                angles = torch.atan2(torch.cross(vec_a, vec_b, dim=-1).norm(dim=-1), torch.dot(vec_a, vec_b, dim=-1))
+                distances = torch.norm(candidate_points - s_coords, dim=-1)
+
+                # Remove points in the region within an angle theta from the line y-x
+                mask = (angles > theta) | (distances > lamda * torch.norm(selected_point - s_coords, dim=-1))
+                idx_count += 1
+
+                if idx_count < nsample:
+                    selected_idx = idx[idx_count]
+                    idx[idx_count-1] = selected_idx
+
+                idx = idx[mask]
+
+            group_idx_new[b, s, :] = idx[:nsample]
+
+    return group_idx_new
+
+
+def get_neighborhood_old(nsample, xyz, new_xyz):
+    """
+    Calculate the neighborhood for each point
+    1. Calculate the sorted knn for each point
+    2. Greedily select points in the neighborhood of each point x as follows:
+        (1) Select the point y with the smallest distance
+        (2) Remove all points in the region within an angle theta from the line y-x with origin at x that have a distance less than lamda * |x-y|
+        (3) Repeat steps (1) and (2) until you have nsample neighbor points for x
+    Input:
+        nsample: max sample number in local region
+        xyz: all points, [B, N, C]
+        new_xyz: query points, [B, S, C]
+    Return:
+        group_idx: grouped points index, [B, S, nsample]
+    """
+
+    lamda = 1.25
+    theta = torch.pi / 6
+
+    # Calculate knn for each point
+    sqrdists = square_distance(new_xyz, xyz)
+    _, group_idx = torch.topk(sqrdists, nsample*4, dim=-1, largest=False, sorted=True)
+
+    # YOUR CODE HERE #
+
+    B, S, _ = new_xyz.shape
+
+    # Greedily select points in the neighborhood
+    group_idx_list = []
+    for b in range(B):
+        group_idx_b = []
+        for s in range(S):
+            idx = group_idx[b, s]
+
+            # Select the point y with the smallest distance
+            y = xyz[b, idx[0]]
+
+
+
+            # Remove points based on angle theta and distance lambda
+            mask = torch.ones_like(idx, dtype=torch.bool)
+            for i in range(1, nsample):
+                x = xyz[b, idx[i]]
+
+                # Calculate the angle between vectors y-x and x-axis
+                angle = torch.atan2(x[1] - y[1], x[0] - y[0])
+
+                # Remove points within the specified angle and distance
+                mask[i:] = mask[i:] & ((torch.abs(angle) > theta) | (torch.norm(x - y, dim=-1) < lamda * torch.norm(y, dim=-1)))
+
+
+
+
+            group_idx_b.append(idx[mask])
+
+        group_idx_list.append(group_idx_b)
+
+    group_idx = torch.stack([torch.stack(group_idx_b) for group_idx_b in group_idx_list], dim=0)
+
+    return group_idx
+
 
 
 def knn_point(nsample, xyz, new_xyz):
