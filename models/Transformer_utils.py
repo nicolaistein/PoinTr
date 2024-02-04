@@ -161,6 +161,12 @@ def get_neighborhood(nsample, xyz, new_xyz):
                     idx[idx_count-1] = selected_idx
 
                 print("Mask: ", mask.shape)
+
+                ones_needed = idx.shape[0] - mask.shape[0]
+                ones = torch.ones(ones_needed, dtype=torch.bool, device=mask.device)
+                mask = torch.cat([ones, mask])
+
+                print("Mask after: ", mask.shape)
                 print("Idx: ", idx.shape)
                 idx = idx[mask]
 
