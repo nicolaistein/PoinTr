@@ -175,34 +175,58 @@ def get_neighborhood_new2(nsample, xyz, new_xyz):
     theta = torch.pi / 6
 
     # Calculate knn for each point
-    sqrdists = square_distance(new_xyz, xyz)
-    _, group_idx = torch.topk(sqrdists, xyz.shape[1], dim=-1, largest=False, sorted=True)
+    sqrdists = square_distance(new_xyz, xyz)  # [B, S, N]
+    _, group_idx = torch.topk(sqrdists, xyz.shape[1], dim=-1, largest=False, sorted=True)  # [B, S, N]
 
     B, S, _ = new_xyz.size()
 
+    print("group_idx shape:", group_idx.shape)
     # Extract point coordinates from indices
-    selected_points = xyz.gather(1, group_idx[:, :, :nsample].unsqueeze(-1).expand(-1, -1, -1, xyz.size(-1)))
+    index = group_idx[:, :, :nsample]
+
+    print("index shape 1:", index.shape)
+
+    index = index.unsqueeze(-1)
+
+    print("index shape 2:", index.shape)
+    
+    index = index.expand(-1, -1, -1, xyz.size(-1))
+
+    print("index shape 3:", index.shape)
+
+    selected_points = xyz.gather(1, index)
+    # selected_points shape: [B, S, nsample, C]
 
     # Calculate vectors and distances
     vec_a = selected_points - new_xyz.unsqueeze(2)
+    # vec_a shape: [B, S, nsample, C]
+
     distances = torch.norm(vec_a, dim=-1)
+    # distances shape: [B, S, nsample]
 
     # Initialize mask for points to keep
     mask = torch.ones_like(distances, dtype=torch.bool)
+    # mask shape: [B, S, nsample]
 
     for i in range(1, nsample):
-
-        print("Calculating neighborhood, nsample =", nsample, "i =", i, " / ", nsample)
         # Calculate angles and check conditions
         vec_b = xyz.gather(1, group_idx[:, :, i:].unsqueeze(-1)).squeeze(2) - new_xyz.unsqueeze(2)
+        # vec_b shape: [B, S, N-i, C]
+
         dot = torch.sum(vec_a[:, :, :, None] * vec_b[:, None, :, :], dim=-1)
+        # dot shape: [B, S, nsample, N-i]
+
         cross = torch.cross(vec_a[:, :, :, None], vec_b[:, None, :, :], dim=-1).norm(dim=-1)
+        # cross shape: [B, S, nsample, N-i]
+
         angles = torch.atan2(cross, dot)
+        # angles shape: [B, S, nsample, N-i]
 
         mask[:, :, i:] = (angles > theta) | (distances[:, :, i:] > lamda * distances[:, :, i - 1:i])
 
     # Apply the mask
     group_idx_new = group_idx[:, :, :nsample][mask]
+    # group_idx_new shape: [B, S, nsample]
 
     return group_idx_new
 
