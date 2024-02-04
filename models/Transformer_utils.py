@@ -126,6 +126,10 @@ def get_neighborhood(nsample, xyz, new_xyz):
             idx_count = 1
 
             while idx_count < nsample:
+
+                print("Idx count: ", idx_count)
+                print("nsample: ", nsample)
+
                 # Nearest neighbor of s coords
                 selected_point = xyz[b, selected_idx, :]
 
