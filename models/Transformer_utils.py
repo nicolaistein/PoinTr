@@ -203,6 +203,8 @@ def get_neighborhood_old(nsample, xyz, new_xyz):
 
             while idx_count < nsample:
 
+                print("Calculating idx_count", idx_count, " / ", nsample)
+
                 # Nearest neighbor of s coords
                 selected_point = xyz[b, selected_idx, :]
 
