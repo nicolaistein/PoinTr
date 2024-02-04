@@ -153,7 +153,59 @@ def get_neighborhood(nsample, xyz, new_xyz):
         return knn_point(nsample, xyz, new_xyz)
     else:
         print("Calculating neighborhood, nsample =", nsample)
-        return get_neighborhood_old(nsample, xyz, new_xyz)
+        return get_neighborhood_new2(nsample, xyz, new_xyz)
+
+def get_neighborhood_new2(nsample, xyz, new_xyz):
+    """
+    Calculate the neighborhood for each point
+    1. Calculate the sorted knn for each point
+    2. Greedily select points in the neighborhood of each point x as follows:
+        (1) Select the point y with the smallest distance
+        (2) Remove all points in the region within an angle theta from the line y-x that have a distance less than lamda * |x-y|
+        (3) Repeat steps (1) and (2) until you have nsample neighbor points for x
+    Input:
+        nsample: max sample number in local region
+        xyz: all points, [B, N, C]
+        new_xyz: query points, [B, S, C]
+    Return:
+        group_idx: grouped points index, [B, S, nsample]
+    """
+
+    lamda = 1.25
+    theta = torch.pi / 6
+
+    # Calculate knn for each point
+    sqrdists = square_distance(new_xyz, xyz)
+    _, group_idx = torch.topk(sqrdists, xyz.shape[1], dim=-1, largest=False, sorted=True)
+
+    B, S, _ = new_xyz.size()
+
+    # Extract point coordinates from indices
+    selected_points = xyz.gather(1, group_idx[:, :, :nsample].unsqueeze(-1).expand(-1, -1, -1, xyz.size(-1)))
+
+    # Calculate vectors and distances
+    vec_a = selected_points - new_xyz.unsqueeze(2)
+    distances = torch.norm(vec_a, dim=-1)
+
+    # Initialize mask for points to keep
+    mask = torch.ones_like(distances, dtype=torch.bool)
+
+    for i in range(1, nsample):
+
+        print("Calculating neighborhood, nsample =", nsample, "i =", i, " / ", nsample)
+        # Calculate angles and check conditions
+        vec_b = xyz.gather(1, group_idx[:, :, i:].unsqueeze(-1)).squeeze(2) - new_xyz.unsqueeze(2)
+        dot = torch.sum(vec_a[:, :, :, None] * vec_b[:, None, :, :], dim=-1)
+        cross = torch.cross(vec_a[:, :, :, None], vec_b[:, None, :, :], dim=-1).norm(dim=-1)
+        angles = torch.atan2(cross, dot)
+
+        mask[:, :, i:] = (angles > theta) | (distances[:, :, i:] > lamda * distances[:, :, i - 1:i])
+
+    # Apply the mask
+    group_idx_new = group_idx[:, :, :nsample][mask]
+
+    return group_idx_new
+
 
 def get_neighborhood_new(nsample, xyz, new_xyz):
     """
