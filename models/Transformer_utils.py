@@ -254,7 +254,7 @@ def get_neighborhood_old(nsample, xyz, new_xyz):
     _, group_idx = torch.topk(sqrdists, xyz.shape[1], dim=-1, largest=False, sorted=True)
 
     B, S, _ = new_xyz.size()
-    _, nsample, _ = group_idx.size()
+   # _, nsample, _ = group_idx.size()
 
     group_idx_new = torch.zeros((B, S, nsample), dtype=torch.long, device=xyz.device)
 
