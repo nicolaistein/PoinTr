@@ -153,7 +153,7 @@ def get_neighborhood(nsample, xyz, new_xyz):
         return knn_point(nsample, xyz, new_xyz)
     else:
         print("Calculating neighborhood, nsample =", nsample)
-        return get_neighborhood_new2(nsample, xyz, new_xyz)
+        return get_neighborhood_old(nsample, xyz, new_xyz)
 
 def get_neighborhood_new2(nsample, xyz, new_xyz):
     """
@@ -327,7 +327,7 @@ def get_neighborhood_old(nsample, xyz, new_xyz):
 
     # Calculate knn for each point
     sqrdists = square_distance(new_xyz, xyz)
-    _, group_idx = torch.topk(sqrdists, xyz.shape[1], dim=-1, largest=False, sorted=True)
+    _, group_idx = torch.topk(sqrdists, nsample*5, dim=-1, largest=False, sorted=True)
 
     B, S, _ = new_xyz.size()
    # _, nsample, _ = group_idx.size()
