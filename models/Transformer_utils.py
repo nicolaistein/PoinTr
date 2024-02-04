@@ -148,12 +148,12 @@ def get_neighborhood2(nsample, xyz, new_xyz):
     return indices.view(B, S, nsample)
 
 def get_neighborhood(nsample, xyz, new_xyz):
-    if nsample > 25:
+    if nsample > 20:
         print("Calculating knn, nsample =", nsample)
         return knn_point(nsample, xyz, new_xyz)
     else:
         print("Calculating neighborhood, nsample =", nsample)
-        return get_neighborhood_new(nsample, xyz, new_xyz)
+        return get_neighborhood_old(nsample, xyz, new_xyz)
 
 def get_neighborhood_new(nsample, xyz, new_xyz):
     """
@@ -176,6 +176,7 @@ def get_neighborhood_new(nsample, xyz, new_xyz):
     # Calculate knn for each point
     sqrdists = square_distance(new_xyz, xyz)
     _, group_idx = torch.topk(sqrdists, xyz.shape[1], dim=-1, largest=False, sorted=True)
+    # sqrdists: [B, S, N] ; group_idx: [B, S, N]
 
     B, S, _ = new_xyz.size()
     _, nsample, _ = group_idx.size()
@@ -185,31 +186,45 @@ def get_neighborhood_new(nsample, xyz, new_xyz):
     s_indices = torch.arange(S, device=xyz.device).view(1, S, 1).expand(B, -1, nsample)
     idx_indices = group_idx.unsqueeze(0).expand(B, -1, -1, -1)
     s_coords = new_xyz[batch_indices, s_indices, :]
+    # batch_indices: [B, S, nsample] ;
+    # s_indices: [B, S, nsample] ;
+    # idx_indices: [B, S, nsample, N] ;
+    # s_coords: [B, S, nsample, C]
 
     # Nearest neighbors of s index
     selected_idx = idx_indices[:, :, 0]
     selected_point = xyz[batch_indices, selected_idx, :]
+    # selected_idx: [B, S] ;
+    # selected_point: [B, S, C]
 
     # Calculate angle and distance
     vec_a = selected_point - s_coords
     vec_b = xyz[batch_indices, idx_indices[:, :, 1:], :] - s_coords.unsqueeze(2)
+    # vec_a: [B, S, nsample, C] ;
+    # vec_b: [B, S, nsample, N, C]
 
     dot = torch.sum(vec_a.unsqueeze(2) * vec_b, dim=-1)
     cross = torch.cross(vec_a.unsqueeze(2), vec_b, dim=-1).norm(dim=-1)
+    # dot: [B, S, nsample, N] ;
+    # cross: [B, S, nsample, N]
 
     angles = torch.atan2(cross, dot)
     distances = torch.norm(vec_b, dim=-1)
+    # angles: [B, S, nsample, N] ; distances: [B, S, nsample, N]
 
     # Remove points in the region within an angle theta from the line y-x
     mask = (angles > theta) | (distances > lamda * torch.norm(vec_a, dim=-1))
+    # mask: [B, S, nsample, N]
 
     # Mask and gather indices
     mask_idx = mask.unsqueeze(-1).expand(-1, -1, -1, nsample)
     gather_idx = idx_indices[:, :, 1:].masked_fill(mask_idx, -1)
     gather_idx = gather_idx.view(B, S, -1)
+    # mask_idx: [B, S, nsample, nsample] ; gather_idx: [B, S, nsample * (nsample-1)]
 
     # Fill missing indices
     gather_idx = torch.cat([gather_idx, -torch.ones(B, S, nsample - gather_idx.size(-1), dtype=torch.long, device=xyz.device)], dim=-1)
+    # gather_idx: [B, S, nsample]
 
     return gather_idx
 
