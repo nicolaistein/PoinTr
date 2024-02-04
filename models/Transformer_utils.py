@@ -125,9 +125,9 @@ def get_neighborhood(nsample, xyz, new_xyz):
             selected_idx = idx[0]
             idx_count = 1
 
-            if idx_count >= nsample:
-                group_idx_new[b, s, :] = idx[:nsample]
-                continue
+    #        if idx.shape[0] == nsample:
+    #            group_idx_new[b, s, :] = idx[:nsample]
+    #            continue
 
             while idx_count < nsample:
 
@@ -177,10 +177,20 @@ def get_neighborhood(nsample, xyz, new_xyz):
                 mask = torch.cat([ones, mask])
 
                 num_zeros = len(mask) - torch.count_nonzero(mask)
+                allowed_zeros = idx.shape[0] - nsample
+                print("Allowed zeros: ", allowed_zeros)
                 print("Num zeros: ", num_zeros)
 
                 print("Mask after: ", mask.shape)
                 print("Idx: ", idx.shape)
+
+                counter = 0
+                while num_zeros > allowed_zeros: 
+                    if mask[counter] == False:
+                        mask[counter] = True
+                        num_zeros -= 1
+                    counter += 1
+
                 idx = idx[mask]
 
             group_idx_new[b, s, :] = idx[:nsample]
