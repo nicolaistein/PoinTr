@@ -131,10 +131,10 @@ def get_neighborhood(nsample, xyz, new_xyz):
 
             while idx_count < nsample:
 
-                print("Current idx length: ", idx.shape)
+    #            print("Current idx length: ", idx.shape)
 
-                print("Idx count: ", idx_count)
-                print("nsample: ", nsample)
+    #            print("Idx count: ", idx_count)
+    #            print("nsample: ", nsample)
 
                 # Nearest neighbor of s coords
                 selected_point = xyz[b, selected_idx, :]
@@ -146,18 +146,18 @@ def get_neighborhood(nsample, xyz, new_xyz):
                 vec_a = selected_point - s_coords
                 vec_b = candidate_points - s_coords
 
-                print("Vec A: ", vec_a.shape)
-                print("Vec B: ", vec_b.shape)
+    #            print("Vec A: ", vec_a.shape)
+    #            print("Vec B: ", vec_b.shape)
 
                 vec_a = vec_a.unsqueeze(0).expand(vec_b.shape[0], -1)
 
-                print("Vec A new: ", vec_a.shape)
+    #            print("Vec A new: ", vec_a.shape)
 
                 dot = torch.sum(vec_a * vec_b, dim=-1)
                 cross = torch.cross(vec_a, vec_b, dim=-1).norm(dim=-1)
 
-                print("Dot: ", dot.shape)
-                print("Cross: ", cross.shape)
+    #            print("Dot: ", dot.shape)
+    #            print("Cross: ", cross.shape)
 
                 angles = torch.atan2(cross, dot)
                 distances = torch.norm(candidate_points - s_coords, dim=-1)
@@ -170,7 +170,7 @@ def get_neighborhood(nsample, xyz, new_xyz):
                     selected_idx = idx[idx_count]
                     idx[idx_count-1] = selected_idx
 
-                print("Mask: ", mask.shape)
+     #           print("Mask: ", mask.shape)
 
                 ones_needed = idx.shape[0] - mask.shape[0]
                 ones = torch.ones(ones_needed, dtype=torch.bool, device=mask.device)
@@ -178,11 +178,11 @@ def get_neighborhood(nsample, xyz, new_xyz):
 
                 num_zeros = len(mask) - torch.count_nonzero(mask)
                 allowed_zeros = idx.shape[0] - nsample
-                print("Allowed zeros: ", allowed_zeros)
-                print("Num zeros: ", num_zeros)
+    #            print("Allowed zeros: ", allowed_zeros)
+    #            print("Num zeros: ", num_zeros)
 
-                print("Mask after: ", mask.shape)
-                print("Idx: ", idx.shape)
+     #           print("Mask after: ", mask.shape)
+     #           print("Idx: ", idx.shape)
 
                 counter = 0
                 while num_zeros > allowed_zeros: 
