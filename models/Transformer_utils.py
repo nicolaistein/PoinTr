@@ -85,6 +85,21 @@ def calculate_principal_curvatures(points):
 ########################################################################################################################
 
 def get_neighborhood(nsample, xyz, new_xyz):
+    """
+    Calculate the neighborhood for each point
+    1. Calculate the sorted knn for each point
+    2. Greedily select points in the neighborhood of each point x as follows:
+        (1) Select the point y with the smallest distance
+        (2) Remove all points in the region within an angle theta from the line y-x that have a distance less than lamda * |x-y|
+        (3) Repeat steps (1) and (2) until you have nsample neighbor points for x
+    Input:
+        nsample: max sample number in local region
+        xyz: all points, [B, N, C]
+        new_xyz: query points, [B, S, C]
+    Return:
+        group_idx: grouped points index, [B, S, nsample]
+    """
+    
     lamda = 1.25
     theta = torch.pi / 6
 
@@ -95,42 +110,42 @@ def get_neighborhood(nsample, xyz, new_xyz):
     B, S, _ = new_xyz.size()
     _, nsample, _ = group_idx.size()
 
-    # Expand dimensions to enable broadcasting
-    new_xyz_expanded = new_xyz.unsqueeze(2)  # [B, S, 1, C]
-    xyz_expanded = xyz.unsqueeze(1)           # [B, 1, N, C]
+    # Create indices tensor
+    indices = torch.arange(nsample, device=xyz.device).unsqueeze(0).unsqueeze(0).expand(B, S, -1)
 
-    # Calculate vectors
-    vec_a = new_xyz_expanded - xyz_expanded   # [B, S, N, C]
-    selected_point = torch.gather(xyz_expanded, 2, group_idx.unsqueeze(-1).expand(-1, -1, -1, xyz.size(-1)))
-    vec_b = selected_point - new_xyz_expanded  # [B, S, N, C]
+    # Select the point y with the smallest distance
+    selected_idx = group_idx[:, :, 0]
 
-    # Calculate dot product, cross product, angles, and distances
-    dot = torch.sum(vec_a * vec_b, dim=-1)    # [B, S, N]
-    cross = torch.cross(vec_a, vec_b, dim=-1).norm(dim=-1)  # [B, S, N]
-    angles = torch.atan2(cross, dot)           # [B, S, N]
-    distances = torch.norm(vec_b, dim=-1)      # [B, S, N]
+    # Nearest neighbors of s coords
+    selected_point = torch.gather(xyz, 1, selected_idx.unsqueeze(-1).expand(-1, -1, xyz.shape[-1]))
 
-    # Create masks
-    mask_angle = angles > theta
-    mask_distance = distances > lamda * torch.norm(selected_point - new_xyz_expanded, dim=-1)
+    # Neighbor coords of s from [1, ..., nsample]
+    candidate_points = torch.gather(xyz, 1, group_idx)
 
-    # Combine masks
-    mask = mask_angle | mask_distance
+    # Calculate angle and distance
+    vec_a = selected_point - new_xyz.unsqueeze(2).expand(-1, -1, nsample, -1)
+    vec_b = candidate_points - new_xyz.unsqueeze(2).expand(-1, -1, nsample, -1)
 
-    # Create indices for selection
-    indices = torch.arange(group_idx.size(-1), device=group_idx.device)
-    indices_expanded = indices.unsqueeze(0).unsqueeze(0).expand(B, S, -1)
+    dot = torch.sum(vec_a * vec_b, dim=-1)
+    cross = torch.cross(vec_a, vec_b, dim=-1).norm(dim=-1)
 
-    # Set masked indices to maximum value to discard them during sorting
-    sqrdists[mask] = float('inf')
+    angles = torch.atan2(cross, dot)
+    distances = torch.norm(candidate_points - new_xyz.unsqueeze(2).expand(-1, -1, nsample, -1), dim=-1)
 
-    # Sort distances and get indices
-    _, sorted_idx = torch.topk(sqrdists, nsample, dim=-1, largest=False, sorted=True)
+    # Remove points in the region within an angle theta from the line y-x
+    mask = (angles > theta) | (distances > lamda * torch.norm(selected_point - new_xyz.unsqueeze(2).expand(-1, -1, nsample, -1), dim=-1))
 
-    # Gather the corresponding indices from the sorted distances
-    group_idx_new = torch.gather(group_idx, 2, sorted_idx)
+    # Fill mask with ones to maintain original indices
+    mask = torch.cat([torch.ones_like(indices[:, :, :1], dtype=torch.bool), mask], dim=-1)
 
-    return group_idx_new
+    # Ensure that the first nsample indices are selected
+    mask[:, :, nsample:] = False
+
+    # Apply the mask to indices
+    indices = torch.masked_select(indices, mask)
+
+    # Reshape and return the result
+    return indices.view(B, S, nsample)
 
 
 
