@@ -148,11 +148,11 @@ def get_neighborhood2(nsample, xyz, new_xyz):
     return indices.view(B, S, nsample)
 
 def get_neighborhood(nsample, xyz, new_xyz):
-    if nsample > 20 or xyz.shape[1] > 200:
-        print("Calculating knn, nsample =", nsample, " points =", xyz.shape[1])
+    if nsample > 20 or new_xyz.shape[1] > 200:
+        print("Calculating knn, nsample =", nsample, " points =", xyz.shape[1], " query =", new_xyz.shape[1])
         return knn_point(nsample, xyz, new_xyz)
     else:
-        print("Calculating neighborhood, nsample =", nsample, " points =", xyz.shape[1])
+        print("Calculating neighborhood, nsample =", nsample, " points =", xyz.shape[1], " query =", new_xyz.shape[1])
         return get_neighborhood_old(nsample, xyz, new_xyz)
 
 def get_neighborhood_new2(nsample, xyz, new_xyz):
@@ -327,7 +327,10 @@ def get_neighborhood_old(nsample, xyz, new_xyz):
 
     # Calculate knn for each point
     sqrdists = square_distance(new_xyz, xyz)
-    _, group_idx = torch.topk(sqrdists, nsample*5, dim=-1, largest=False, sorted=True)
+    _, group_idx = torch.topk(sqrdists, nsample*4, dim=-1, largest=False, sorted=True)
+
+ #   print("get_neighborhood_old, group_idx shape: ", group_idx.shape)
+ #   print("group_idx shape:", group_idx.shape)
 
     B, S, _ = new_xyz.size()
    # _, nsample, _ = group_idx.size()
