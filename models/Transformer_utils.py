@@ -391,7 +391,7 @@ def get_neighborhood_old2(nsample, xyz, new_xyz):
 
     # =============================== OKAY ==============================================
 
-    region_idx = angles / (360.0 / num_regions)  # Calculate the region index for each point in the batch
+    region_idx = torch.floor(angles / (360.0 / num_regions)).int()  # Calculate the region index for each point in the batch
     print("region_idx shape: ", region_idx.shape)
     print("region_idx 1: ", region_idx[0, 0, 0])
     print("region_idx 2: ", region_idx[0, 0, 1])
@@ -417,24 +417,30 @@ def get_neighborhood_old2(nsample, xyz, new_xyz):
     #return group_idx
 
     for i in range(num_regions):
+        print("Selecting points from region", i, "of", num_regions)
         # Mask for points in this region
-        region_mask = (region_idx == i)
-        
-        # Calculate the number of points in this region
-        num_points_region = torch.sum(region_mask, dim=-1)  # Shape: [B, S]
-        
-        # Number of points to select from this region
-        points_to_select = torch.clamp(points_per_region - num_points_region, min=0)  # Shape: [B, S]
+        region_mask = (region_idx == i) # Shape: [B, S, N]
         
         # Set the group indices for points not in this region to -1 so they won't be selected
-        group_idx[~region_mask] = -1
-        
+        # group_idx[~region_mask] = -1
+
         # Calculate the squared distances for points in this region
         sqrdists_region = sqrdists.clone()
         sqrdists_region[~region_mask] = float('inf')  # Set distances for points not in this region to infinity
-        
+
+        # Calculate the number of points in this region
+        num_points_region = torch.sum(region_mask, dim=-1)  # Shape: [B, S]
+
         # Sort distances within the region
         _, indices_region = torch.topk(sqrdists_region, xyz.shape[1], dim=-1, largest=False, sorted=True)
+
+
+        # =============================== OKAY ==============================================
+    
+        # Number of points to select from this region
+        #points_to_select = torch.clamp(points_per_region - num_points_region, min=0)  # Shape: [B, S]
+        points_to_select = points_per_region
+        
         
         # Select the nearest points from this region
         selected_indices = indices_region[region_mask][:, :, :points_to_select]  # Shape: [B, S, points_to_select]
