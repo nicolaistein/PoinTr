@@ -339,8 +339,8 @@ def get_neighborhood_old2(nsample, xyz, new_xyz):
 
     #new_xyz_y = new_xyz[:, :, 1].unsqueeze(-1)
     #new_xyz_x = new_xyz[:, :, 0].unsqueeze(-1)
-    new_xyz_y = new_xyz[:, :, 1]
-    new_xyz_x = new_xyz[:, :, 0]
+    new_xyz_y = new_xyz[:, :, 1].unsqueeze(-1).expand(-1, -1, xyz.shape[1])
+    new_xyz_x = new_xyz[:, :, 0].unsqueeze(-1).expand(-1, -1, xyz.shape[1])
 
     print("new_xyz_x shape: ", new_xyz_x.shape)
     print("new_xyz_y shape: ", new_xyz_y.shape)
