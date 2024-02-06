@@ -5,6 +5,20 @@ import open3d as o3d
 from tqdm import tqdm
 
 
+def sample_points_from_mesh(mesh, num_points):
+    pcd = mesh.sample_points_uniformly(
+        # pcd = mesh.sample_points_poisson_disk(
+        number_of_points=num_points
+    )
+
+    # find the center of the point cloud
+    center = pcd.get_center()
+
+    # translate the point cloud so that its center is at the origin
+    pcd.translate(-center)
+    return pcd
+
+
 def preprocess_mesh(input_dir, output_dir, num_points):
     file_count = 0
     for root, dirs, files in os.walk(input_dir):
@@ -43,20 +57,17 @@ def preprocess_mesh(input_dir, output_dir, num_points):
                             # read the mesh
                             mesh = o3d.io.read_triangle_mesh(os.path.join(root, file))
 
+                            num_points_partial = num_points // 10
+
                             # sample points from the mesh
-                            pcd = mesh.sample_points_uniformly(
-                                number_of_points=num_points
+                            pcd_complete = sample_points_from_mesh(mesh, num_points)
+                            pcd_partial = sample_points_from_mesh(
+                                mesh, num_points_partial
                             )
-
-                            # find the center of the point cloud
-                            center = pcd.get_center()
-
-                            # translate the point cloud so that its center is at the origin
-                            pcd.translate(-center)
 
                             # perform a cut along the xz plane
                             max_coord_crop = 1000000
-                            pcd_cropped = pcd.crop(
+                            pcd_partial = pcd_partial.crop(
                                 o3d.geometry.AxisAlignedBoundingBox(
                                     min_bound=(-max_coord_crop, 0, -max_coord_crop),
                                     max_bound=(
@@ -76,13 +87,14 @@ def preprocess_mesh(input_dir, output_dir, num_points):
                                 os.path.join(
                                     output_file_dir_complete, output_file_name
                                 ),
-                                pcd,
+                                pcd_complete,
                             )
                             o3d.io.write_point_cloud(
                                 os.path.join(output_file_dir_partial, output_file_name),
-                                pcd_cropped,
+                                pcd_partial,
                             )
                         except Exception as e:
+                            print(f"Error processing {os.path.join(root, file)}: {e}")
                             error_file_paths.append(os.path.join(root, file))
 
                     pbar.update(1)
