@@ -454,9 +454,11 @@ def get_neighborhood_old2(nsample, xyz, new_xyz):
 
         # Fill in the selected indices in the group index tensor
 
-        print("group_idx index: ", region_mask.unsqueeze(-1).expand_as(selected_indices))
+        group_idx[:, :, i * points_per_region:(i + 1) * points_per_region] = selected_indices
 
-        group_idx[region_mask.unsqueeze(-1).expand_as(selected_indices)] = selected_indices
+        #print("group_idx index: ", region_mask.unsqueeze(-1).expand_as(selected_indices))
+
+        # group_idx[region_mask.unsqueeze(-1).expand_as(selected_indices)] = selected_indices
 
         print("group_idx final shape: ", group_idx.shape)
         
