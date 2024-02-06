@@ -345,17 +345,41 @@ def get_neighborhood_old2(nsample, xyz, new_xyz):
     print("new_xyz_x shape: ", new_xyz_x.shape)
     print("new_xyz_y shape: ", new_xyz_y.shape)
 
+
     xyz_y = xyz[:, :, 1]
     xyz_x = xyz[:, :, 0]
 
     print("xyz_x shape: ", xyz_x.shape)
     print("xyz_y shape: ", xyz_y.shape)
 
+
+
     # Calculate angles between query points and all points
-    angles = torch.atan2(new_xyz_y - xyz_y, new_xyz_x  - xyz_x)
+    angles = torch.zeros((new_xyz.shape[0], new_xyz.shape[1], xyz.shape[1]), dtype=torch.float, device=new_xyz.device)
+    for i in range(new_xyz.shape[0]):
+        for j in range(new_xyz.shape[1]):
+            for k in range(xyz.shape[1]):
+                angles[i, j, k] = torch.atan2(new_xyz[i, j, 1] - xyz[i, k, 1], new_xyz[i, j, 0] - xyz[i, k, 0])
+
+#    for i in range(num_regions):
+#        angles += torch.atan2(new_xyz_y - xyz_y, new_xyz_x  - xyz_x - region_mask[:, :, i])
+
     print("angles shape: ", angles.shape)
+    print("angle 1: ", angles[0, 0, 0])
+    print("angle 2: ", angles[0, 0, 1])
+    print("angle 3: ", angles[0, 0, 2])
+
+
+
+
+    # Calculate angles between query points and all points
+    # angles = torch.atan2(new_xyz_y - xyz_y, new_xyz_x  - xyz_x)
     angles = (angles * (180.0 / 3.141592653589793) + 180.0) % 360.0  # Convert angles to degrees and ensure positive values
     # angles shape: [B, S, N]
+    print("angles shape: ", angles.shape)
+    print("angle after 1: ", angles[0, 0, 0])
+    print("angle after 2: ", angles[0, 0, 1])
+    print("angle after 3: ", angles[0, 0, 2])
 
     # Calculate the region index for each point in the batch
     region_idx = torch.floor((angles + region_mask / 2) % 360.0 / region_mask)
