@@ -392,6 +392,10 @@ def get_neighborhood_old2(nsample, xyz, new_xyz):
     # =============================== OKAY ==============================================
 
     region_idx = angles / (360.0 / num_regions)  # Calculate the region index for each point in the batch
+    print("region_idx shape: ", region_idx.shape)
+    print("region_idx 1: ", region_idx[0, 0, 0])
+    print("region_idx 2: ", region_idx[0, 0, 1])
+    print("region_idx 3: ", region_idx[0, 0, 2])
 
     # Calculate the region index for each point in the batch
     # region_idx = torch.floor((angles + region_mask / 2) % 360.0 / region_mask)
@@ -400,20 +404,46 @@ def get_neighborhood_old2(nsample, xyz, new_xyz):
     # Initialize grouped indices
     group_idx = torch.zeros((xyz.shape[0], new_xyz.shape[1], nsample), dtype=torch.long, device=new_xyz.device)
     print("group_idx shape: ", group_idx.shape)
-    print("group_idx 1: ", group_idx[0, 0, 0])
-    print("group_idx 2: ", group_idx[0, 0, 1])
-    print("group_idx 3: ", group_idx[0, 0, 2])
 
     # Select points from each region
-    for i in range(num_regions):
-        region_points = (region_idx == i).nonzero(as_tuple=True)
-        region_indices = group_idx[region_points[0], region_points[1], :points_per_region]
-        region_distances = sqrdists[region_points[0], region_points[1], :points_per_region]
-        _, sorted_indices = torch.sort(region_distances, dim=-1)
-        group_idx[region_points[0], region_points[1], :points_per_region] = region_indices[sorted_indices]
+    #for i in range(num_regions):
+    #    region_points = (region_idx == i).nonzero(as_tuple=True)
+    #    region_indices = group_idx[region_points[0], region_points[1], :points_per_region]
+    #    region_distances = sqrdists[region_points[0], region_points[1], :points_per_region]
+    #    _, sorted_indices = torch.sort(region_distances, dim=-1)
+    #    group_idx[region_points[0], region_points[1], :points_per_region] = region_indices[sorted_indices]
 
     # group_idx shape: [B, S, nsample]
+    #return group_idx
+
+    for i in range(num_regions):
+        # Mask for points in this region
+        region_mask = (region_idx == i)
+        
+        # Calculate the number of points in this region
+        num_points_region = torch.sum(region_mask, dim=-1)  # Shape: [B, S]
+        
+        # Number of points to select from this region
+        points_to_select = torch.clamp(points_per_region - num_points_region, min=0)  # Shape: [B, S]
+        
+        # Set the group indices for points not in this region to -1 so they won't be selected
+        group_idx[~region_mask] = -1
+        
+        # Calculate the squared distances for points in this region
+        sqrdists_region = sqrdists.clone()
+        sqrdists_region[~region_mask] = float('inf')  # Set distances for points not in this region to infinity
+        
+        # Sort distances within the region
+        _, indices_region = torch.topk(sqrdists_region, xyz.shape[1], dim=-1, largest=False, sorted=True)
+        
+        # Select the nearest points from this region
+        selected_indices = indices_region[region_mask][:, :, :points_to_select]  # Shape: [B, S, points_to_select]
+        
+        # Fill in the selected indices in the group index tensor
+        group_idx[region_mask.unsqueeze(-1).expand_as(selected_indices)] = selected_indices
+        
     return group_idx
+
    
 
 def get_neighborhood_old(nsample, xyz, new_xyz):
