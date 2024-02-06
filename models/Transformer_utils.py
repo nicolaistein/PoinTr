@@ -323,7 +323,7 @@ def get_neighborhood_old2(nsample, xyz, new_xyz):
     sqrdists = torch.cdist(new_xyz, xyz, p=2)  # L2 distance
     # sqrdists shape: [B, S, N]
 
-    _, group_idx = torch.topk(sqrdists, xyz.shape[1], dim=-1, largest=False, sorted=True)
+    #_, group_idx = torch.topk(sqrdists, xyz.shape[1], dim=-1, largest=False, sorted=True)
     # group_idx shape: [B, S, N]
 
     # Define the number of regions
@@ -428,11 +428,15 @@ def get_neighborhood_old2(nsample, xyz, new_xyz):
         sqrdists_region = sqrdists.clone()
         sqrdists_region[~region_mask] = float('inf')  # Set distances for points not in this region to infinity
 
+        print("sqrdists_region shape: ", sqrdists_region.shape)
+
         # Calculate the number of points in this region
         num_points_region = torch.sum(region_mask, dim=-1)  # Shape: [B, S]
 
         # Sort distances within the region
-        _, indices_region = torch.topk(sqrdists_region, xyz.shape[1], dim=-1, largest=False, sorted=True)
+        #_, group_idx = torch.topk(sqrdists, xyz.shape[1], dim=-1, largest=False, sorted=True)
+        _, indices_region = torch.topk(sqrdists_region, xyz.shape[1], dim=-1, largest=False, sorted=True) # Shape: [B, S, N]
+        print("indices_region shape: ", indices_region.shape)
 
 
         # =============================== OKAY ==============================================
@@ -443,10 +447,18 @@ def get_neighborhood_old2(nsample, xyz, new_xyz):
         
         
         # Select the nearest points from this region
-        selected_indices = indices_region[region_mask][:, :, :points_to_select]  # Shape: [B, S, points_to_select]
+        selected_indices = indices_region[:, :, :points_to_select]  # Shape: [B, S, points_to_select]
+        # selected_indices = indices_region[region_mask][:, :, :points_to_select]  # Shape: [B, S, points_to_select]
         
+        print("selected_indices shape: ", selected_indices.shape)
+
         # Fill in the selected indices in the group index tensor
+
+        print("group_idx index: ", region_mask.unsqueeze(-1).expand_as(selected_indices))
+
         group_idx[region_mask.unsqueeze(-1).expand_as(selected_indices)] = selected_indices
+
+        print("group_idx final shape: ", group_idx.shape)
         
     return group_idx
 
