@@ -185,7 +185,7 @@ def get_neighborhood_new(nsample, xyz, new_xyz):
     # sqrdists shape: [B, S, N]
 
     # Define the number of regions
-    num_regions = 4
+    num_regions = 8
     points_per_region = nsample // num_regions
 
     # Create a mask for selecting points from each region
@@ -193,16 +193,31 @@ def get_neighborhood_new(nsample, xyz, new_xyz):
     region_mask = region_mask.to(new_xyz.device)
 
     # Calculate angles between query points and all points
-    delta_y = new_xyz[:, :, 1].unsqueeze(2) - xyz[:, :, 1].unsqueeze(1)  # Shape: [B, S, N]
     delta_x = new_xyz[:, :, 0].unsqueeze(2) - xyz[:, :, 0].unsqueeze(1)  # Shape: [B, S, N]
-    angles = torch.atan2(delta_y, delta_x)  # Shape: [B, S, N]
+    delta_y = new_xyz[:, :, 1].unsqueeze(2) - xyz[:, :, 1].unsqueeze(1)  # Shape: [B, S, N]
+    delta_z = new_xyz[:, :, 2].unsqueeze(2) - xyz[:, :, 2].unsqueeze(1)  # Shape: [B, S, N]
 
+    angles = torch.atan2(delta_y, delta_x)  # Shape: [B, S, N]
+    angles2 = torch.atan2(delta_z, torch.sqrt(delta_x ** 2 + delta_y ** 2))  # Shape: [B, S, N]
 
     # Calculate angles between query points and all points
     angles = (angles * (180.0 / torch.pi) + 180.0) % 360.0  # Convert angles to degrees and ensure positive values
+    angles2 = (angles2 * (180.0 / torch.pi) + 180.0) % 360.0  # Convert angles to degrees and ensure positive values
     # angles shape: [B, S, N]
 
-    region_idx = torch.floor(angles / (360.0 / num_regions)).int()  # Calculate the region index for each point in the batch
+    # Horizontal region index
+    idx_count = 4
+
+    # Vertical region index
+    idx2_count = 2
+
+    region_idx = torch.floor(angles / (360.0 / idx_count)).int()  # Calculate the region index for each point in the batch
+    region_idx[region_idx == 4] = 3
+
+    region_idx2 = torch.floor(angles2 / (360.0 / idx2_count)).int()  # Calculate the region index for each point in the batch
+    region_idx2[region_idx2 == 2] = 1
+
+    region_idx = region_idx + region_idx2 * 4
     #print("region_idx shape: ", region_idx.shape)
 
     # Initialize grouped indices
@@ -219,7 +234,7 @@ def get_neighborhood_new(nsample, xyz, new_xyz):
         #print("sqrdists_region shape: ", sqrdists_region.shape)
 
         # Calculate the number of points in this region
-        num_points_region = torch.sum(region_mask, dim=-1)  # Shape: [B, S]
+        # num_points_region = torch.sum(region_mask, dim=-1)  # Shape: [B, S]
 
         # Sort distances within the region
         _, indices_region = torch.topk(sqrdists_region, xyz.shape[1], dim=-1, largest=False, sorted=True) # Shape: [B, S, N]
