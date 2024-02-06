@@ -373,24 +373,36 @@ def get_neighborhood_old2(nsample, xyz, new_xyz):
     print("angle 2: ", angles[0, 0, 1])
     print("angle 3: ", angles[0, 0, 2])
 
-
+    print("min angle: ", torch.min(angles))
+    print("max angle: ", torch.max(angles))
 
 
     # Calculate angles between query points and all points
     # angles = torch.atan2(new_xyz_y - xyz_y, new_xyz_x  - xyz_x)
-    angles = (angles * (180.0 / 3.141592653589793) + 180.0) % 360.0  # Convert angles to degrees and ensure positive values
+    angles = (angles * (180.0 / torch.pi) + 180.0) % 360.0  # Convert angles to degrees and ensure positive values
     # angles shape: [B, S, N]
     print("angles shape: ", angles.shape)
     print("angle after 1: ", angles[0, 0, 0])
     print("angle after 2: ", angles[0, 0, 1])
     print("angle after 3: ", angles[0, 0, 2])
 
+    print("min angle: ", torch.min(angles))
+    print("max angle: ", torch.max(angles))
+
+    # =============================== OKAY ==============================================
+
+    region_idx = angles / (360.0 / num_regions)  # Calculate the region index for each point in the batch
+
     # Calculate the region index for each point in the batch
-    region_idx = torch.floor((angles + region_mask / 2) % 360.0 / region_mask)
+    # region_idx = torch.floor((angles + region_mask / 2) % 360.0 / region_mask)
     # region_idx shape: [B, S, N]
 
     # Initialize grouped indices
     group_idx = torch.zeros((xyz.shape[0], new_xyz.shape[1], nsample), dtype=torch.long, device=new_xyz.device)
+    print("group_idx shape: ", group_idx.shape)
+    print("group_idx 1: ", group_idx[0, 0, 0])
+    print("group_idx 2: ", group_idx[0, 0, 1])
+    print("group_idx 3: ", group_idx[0, 0, 2])
 
     # Select points from each region
     for i in range(num_regions):
