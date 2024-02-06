@@ -333,6 +333,7 @@ def get_neighborhood_old2(nsample, xyz, new_xyz):
     # Create a mask for selecting points from each region
     region_mask = torch.arange(num_regions).view(1, 1, -1) * (360.0 / num_regions)
     region_mask = region_mask.to(new_xyz.device)
+    print("region_mask shape: ", region_mask.shape)
 
     # Calculate angles between query points and all points
     angles = torch.atan2(new_xyz[:, :, 1].unsqueeze(-1) - xyz[:, :, 1], new_xyz[:, :, 0].unsqueeze(-1) - xyz[:, :, 0])
