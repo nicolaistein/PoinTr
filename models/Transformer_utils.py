@@ -335,6 +335,8 @@ def get_neighborhood_old2(nsample, xyz, new_xyz):
     region_mask = region_mask.to(new_xyz.device)
     print("region_mask: ", region_mask)
 
+    print("y_test_shape: ", new_xyz[:, :, 1].shape)
+
     new_xyz_y = new_xyz[:, :, 1].unsqueeze(-1)
     new_xyz_x = new_xyz[:, :, 0].unsqueeze(-1)
 
