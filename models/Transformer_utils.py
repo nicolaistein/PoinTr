@@ -337,8 +337,10 @@ def get_neighborhood_old2(nsample, xyz, new_xyz):
 
     print("y_test_shape: ", new_xyz[:, :, 1].shape)
 
-    new_xyz_y = new_xyz[:, :, 1].unsqueeze(-1)
-    new_xyz_x = new_xyz[:, :, 0].unsqueeze(-1)
+    #new_xyz_y = new_xyz[:, :, 1].unsqueeze(-1)
+    #new_xyz_x = new_xyz[:, :, 0].unsqueeze(-1)
+    new_xyz_y = new_xyz[:, :, 1]
+    new_xyz_x = new_xyz[:, :, 0]
 
     print("new_xyz_x shape: ", new_xyz_x.shape)
     print("new_xyz_y shape: ", new_xyz_y.shape)
@@ -351,6 +353,7 @@ def get_neighborhood_old2(nsample, xyz, new_xyz):
 
     # Calculate angles between query points and all points
     angles = torch.atan2(new_xyz_y - xyz_y, new_xyz_x  - xyz_x)
+    print("angles shape: ", angles.shape)
     angles = (angles * (180.0 / 3.141592653589793) + 180.0) % 360.0  # Convert angles to degrees and ensure positive values
     # angles shape: [B, S, N]
 
