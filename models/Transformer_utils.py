@@ -153,7 +153,7 @@ def get_neighborhood(nsample, xyz, new_xyz):
 #        return knn_point(nsample, xyz, new_xyz)
 #    else:
     print("Calculating neighborhood, nsample =", nsample, " points =", xyz.shape[1], " query =", new_xyz.shape[1])
-    return get_neighborhood_old(nsample, xyz, new_xyz)
+    return get_neighborhood_old2(nsample, xyz, new_xyz)
 
 def get_neighborhood_new2(nsample, xyz, new_xyz):
     """
@@ -304,6 +304,59 @@ def get_neighborhood_new(nsample, xyz, new_xyz):
 
     return gather_idx
 
+def get_neighborhood_old2(nsample, xyz, new_xyz):
+    """
+    Calculates the neighborhood for each point. Returns the indices of the selected neighbors.
+    For each point p, the neighborhood is selected as follows:
+        1. Define 4 regions around p made up of 90 degrees each
+        2. Assign each point x of the batch to one of the 4 regions based on the angle between p and x
+        3. Select the nsample/4 nearest neighbors from each region
+    Input:
+        nsample: max sample number in local region
+        xyz: all points, [B, N, C]
+        new_xyz: query points, [B, S, C]
+    Return:
+        group_idx: grouped points index, [B, S, nsample]
+    """
+
+    # Calculate knn for each point
+    sqrdists = torch.cdist(new_xyz, xyz, p=2)  # L2 distance
+    # sqrdists shape: [B, S, N]
+
+    _, group_idx = torch.topk(sqrdists, xyz.shape[1], dim=-1, largest=False, sorted=True)
+    # group_idx shape: [B, S, N]
+
+    # Define the number of regions
+    num_regions = 4
+    points_per_region = nsample // num_regions
+
+    # Create a mask for selecting points from each region
+    region_mask = torch.arange(num_regions).view(1, 1, -1) * (360.0 / num_regions)
+    region_mask = region_mask.to(new_xyz.device)
+
+    # Calculate angles between query points and all points
+    angles = torch.atan2(new_xyz[:, :, 1].unsqueeze(-1) - xyz[:, :, 1], new_xyz[:, :, 0].unsqueeze(-1) - xyz[:, :, 0])
+    angles = (angles * (180.0 / 3.141592653589793) + 180.0) % 360.0  # Convert angles to degrees and ensure positive values
+    # angles shape: [B, S, N]
+
+    # Calculate the region index for each point in the batch
+    region_idx = torch.floor((angles + region_mask / 2) % 360.0 / region_mask)
+    # region_idx shape: [B, S, N]
+
+    # Initialize grouped indices
+    group_idx = torch.zeros((xyz.shape[0], new_xyz.shape[1], nsample), dtype=torch.long, device=new_xyz.device)
+
+    # Select points from each region
+    for i in range(num_regions):
+        region_points = (region_idx == i).nonzero(as_tuple=True)
+        region_indices = group_idx[region_points[0], region_points[1], :points_per_region]
+        region_distances = sqrdists[region_points[0], region_points[1], :points_per_region]
+        _, sorted_indices = torch.sort(region_distances, dim=-1)
+        group_idx[region_points[0], region_points[1], :points_per_region] = region_indices[sorted_indices]
+
+    # group_idx shape: [B, S, nsample]
+    return group_idx
+   
 
 def get_neighborhood_old(nsample, xyz, new_xyz):
     """
@@ -341,7 +394,7 @@ def get_neighborhood_old(nsample, xyz, new_xyz):
         print("Calculating neighborhood, batch", b+1, "of", B, " S =", S)
     
         for s in range(S):
-            print("Calculating s, batch", b+1, "/", B, ", s: ", s, " / ", S)
+    #        print("Calculating s, batch", b+1, "/", B, ", s: ", s, " / ", S)
 
             s_coords = new_xyz[b, s, :]
 
