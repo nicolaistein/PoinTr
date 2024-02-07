@@ -240,16 +240,18 @@ def run_net(args, config, train_writer=None, val_writer=None):
                     args,
                     logger=logger,
                 )
-        builder.save_checkpoint(
-            base_model,
-            optimizer,
-            epoch,
-            metrics,
-            best_metrics,
-            "ckpt-last",
-            args,
-            logger=logger,
-        )
+
+        if epoch % args.ckpt_freq == 0:
+            builder.save_checkpoint(
+                base_model,
+                optimizer,
+                epoch,
+                metrics,
+                best_metrics,
+                "ckpt-last",
+                args,
+                logger=logger,
+            )
         if (config.max_epoch - epoch) < 2:
             builder.save_checkpoint(
                 base_model,
