@@ -43,7 +43,7 @@ def transform_pointcloud(pointcloud):
         n,
         alpha,
         beta,
-        shape_index
+  #      shape_index
     ], dim=-1)
     
     return transformed_points
