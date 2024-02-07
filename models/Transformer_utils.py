@@ -30,13 +30,13 @@ def transform_pointcloud(pointcloud):
 
     beta = torch.sum(n * (x - p), dim=-1).unsqueeze(-1)
 
-    print("p shape: ", p.shape)
-    print("n shape: ", n.shape)
-    print("beta shape: ", beta.shape)
+#    print("p shape: ", p.shape)
+#    print("n shape: ", n.shape)
+#    print("beta shape: ", beta.shape)
 
-    shape_index = calculate_shape_index(p)
+#    shape_index = calculate_shape_index(p)
 
-    print("shape_index shape: ", shape_index.shape)
+#    print("shape_index shape: ", shape_index.shape)
 
     transformed_points = torch.cat([
         p,
