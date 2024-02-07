@@ -30,12 +30,20 @@ def transform_pointcloud(pointcloud):
 
     beta = torch.sum(n * (x - p), dim=-1).unsqueeze(-1)
 
+    print("p shape: ", p.shape)
+    print("n shape: ", n.shape)
+    print("beta shape: ", beta.shape)
+
+    shape_index = calculate_shape_index(p)
+
+    print("shape_index shape: ", shape_index.shape)
+
     transformed_points = torch.cat([
         p,
         n,
         alpha,
         beta,
-    #    calculate_principal_curvatures(p)
+        shape_index
     ], dim=-1)
     
     return transformed_points
@@ -68,18 +76,59 @@ def find_nearest_neighbors(points):
     
     return x
 
-def calculate_principal_curvatures(points):
-#    print("Calculating principal curvatures...")
-    # Assuming points has shape [batch_size, num_points, 3]
-    # Assuming a local window around each point for the quadratic surface fitting
-    # TODO: Implement the actual principal curvature calculation
-    # ...
-    # Placeholder for demonstration purposes (replace with actual implementation)
-    k, s = torch.randn_like(points[:, :, :2]), torch.randn_like(points[:, :, :2])
-    
-    curvature = 0.5 - (1 / torch.pi) * torch.atan2(k + s, k - s)
-    
-    return curvature
+def calculate_shape_index(points, k=10):
+    """
+    Calculates the shape index for each point in the batch.
+    For each point p, the shape index is computed as follows:
+        1. Fit a bi-quadratic surface to the k nearest neighbors of p and use the least squares method to find the coefficients
+        2. Use differential geometry to calculate principal curvatures and principal directions
+        3. With k1 and k2 being the minimum and maximum principal curvatures, the shape index is calculated as:
+            shape_index = 0.5 - 1/pi * arctan((k1 + k2) / (k1 - k2))
+    Input:
+        points: all points, [B, N, C]
+        k: number of nearest neighbors to consider
+    Return:
+        shape_index: grouped points index, [B, N]
+    """
+    B, N, C = points.size()
+    device = points.device
+
+    # Initialize shape_index tensor
+    shape_index = torch.zeros((B, N), dtype=torch.float32, device=device)
+
+    for b in range(B):
+        # Calculate pairwise distances
+        dist_matrix = torch.cdist(points[b], points[b])
+
+        # Get indices of k nearest neighbors
+        _, indices = torch.topk(dist_matrix, k=k+1, largest=False, sorted=True)
+        indices = indices[:, 1:]  # Exclude self
+
+        # Gather k nearest neighbor points
+        neighbor_points = torch.gather(points[b], 1, indices.unsqueeze(2).expand(-1, -1, C))
+
+        # Calculate surface coefficients using least squares method
+        A = torch.cat([torch.ones_like(indices[:, :, 0:1]), neighbor_points], dim=-1)
+        coeffs, _ = torch.lstsq(points[b].unsqueeze(1).repeat(1, N, 1), A)
+
+        # Compute principal curvatures
+        p0 = coeffs[:, :, 1]
+        p1 = coeffs[:, :, 2]
+        p2 = coeffs[:, :, 3]
+        E = torch.sqrt(1 + p1 ** 2)
+        F = p1 * p2
+        G = torch.sqrt(1 + p2 ** 2)
+        L = p0
+        M = p1 * p0 + p2
+        N = p0
+
+        k1 = (L + N - torch.sqrt((L - N) ** 2 + 4 * M ** 2)) / 2
+        k2 = (L + N + torch.sqrt((L - N) ** 2 + 4 * M ** 2)) / 2
+
+        # Compute shape index
+        shape_index[b] = 0.5 - (1 / torch.pi) * torch.atan((k1 + k2) / (k1 - k2))
+
+    return shape_index
 
 
 ########################################################################################################################
