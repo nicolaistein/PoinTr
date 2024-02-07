@@ -8,60 +8,81 @@ import open3d as o3d
 from tqdm import tqdm
 
 
-def sample_points_from_mesh(mesh, num_points):
+def sample_points_from_mesh(mesh, num_points, translate=None, view_id=None):
     pcd = mesh.sample_points_uniformly(
         # pcd = mesh.sample_points_poisson_disk(
         number_of_points=num_points
     )
 
-    # find the center of the point cloud
-    center = pcd.get_center()
+    if translate is not None:
+        pcd = pcd.translate(translate)
 
-    # translate the point cloud so that its center is at the origin
-    pcd.translate(-center)
+    if view_id is not None:
+        # perform a cut along the a plane
+        max_coord_crop = 1000000
+
+        crop_coords = [
+            -max_coord_crop,
+            -max_coord_crop,
+            -max_coord_crop,
+            max_coord_crop,
+            max_coord_crop,
+            max_coord_crop,
+        ]
+        crop_coords[view_id] = 0
+
+        pcd = pcd.crop(
+            o3d.geometry.AxisAlignedBoundingBox(
+                min_bound=(crop_coords[0], crop_coords[1], crop_coords[2]),
+                max_bound=(crop_coords[3], crop_coords[4], crop_coords[5]),
+            )
+        )
+
     return pcd
 
 
 def preprocess_mesh_dir(input_dir, output_dir, num_points, class_id, pbar):
+    view_id_count = 6
+
     file_names = []
     error_file_paths = []
     for root, dirs, files in os.walk(input_dir):
         for file in files:
             if file.endswith(".off"):
                 # get output file paths
-                output_file_name = file.replace(".off", "")
-                output_file_name_complete = output_file_name + ".pcd"
-                output_file_name_partial = "00.pcd"
+                input_file_name = file.replace(".off", "")
+                output_file_name_complete = input_file_name + ".pcd"
 
                 relative_path = os.path.relpath(root, input_dir)
-                output_file_path_complete = os.path.join(output_dir, relative_path)
-                output_file_path_complete = os.path.join(
-                    output_file_path_complete, "complete"
+                output_file_dir_complete = os.path.join(output_dir, relative_path)
+                output_file_dir_complete = os.path.join(
+                    output_file_dir_complete, "complete"
+                )
+                output_file_dir_complete = os.path.join(
+                    output_file_dir_complete, class_id
                 )
                 output_file_path_complete = os.path.join(
-                    output_file_path_complete, class_id
-                )
-                output_file_path_complete = os.path.join(
-                    output_file_path_complete, output_file_name_complete
+                    output_file_dir_complete, output_file_name_complete
                 )
 
-                output_file_path_partial = os.path.join(output_dir, relative_path)
-                output_file_path_partial = os.path.join(
-                    output_file_path_partial, "partial"
+                output_file_dir_partial = os.path.join(output_dir, relative_path)
+                output_file_dir_partial = os.path.join(
+                    output_file_dir_partial, "partial"
                 )
-                output_file_path_partial = os.path.join(
-                    output_file_path_partial, class_id
+                output_file_dir_partial = os.path.join(
+                    output_file_dir_partial, class_id
                 )
-                output_file_path_partial = os.path.join(
-                    output_file_path_partial, output_file_name
+                output_file_dir_partial = os.path.join(
+                    output_file_dir_partial, input_file_name
                 )
-                output_file_path_partial = os.path.join(
-                    output_file_path_partial, output_file_name_partial
-                )
+                output_file_path_partial_list = [
+                    os.path.join(output_file_dir_partial, "0%s.pcd" % view_id)
+                    for view_id in range(view_id_count)
+                ]
 
-                # check if the output file already exists
-                if not os.path.exists(output_file_path_complete) or not os.path.exists(
-                    output_file_path_partial
+                # check if any of the output files do not exist already
+                if not os.path.exists(output_file_path_complete) or not all(
+                    [os.path.exists(p) for p in output_file_path_partial_list]
                 ):
                     try:
                         # read the mesh
@@ -87,43 +108,39 @@ def preprocess_mesh_dir(input_dir, output_dir, num_points, class_id, pbar):
                         # # mesh.remove_triangles_by_mask(dot_products <= 0)
 
                         # sample points from the mesh
-                        num_points_partial = num_points // 10
                         pcd_complete = sample_points_from_mesh(mesh, num_points)
-                        pcd_partial = sample_points_from_mesh(mesh, num_points_partial)
 
-                        # perform a cut along the xz plane
-                        max_coord_crop = 1000000
-                        pcd_partial = pcd_partial.crop(
-                            o3d.geometry.AxisAlignedBoundingBox(
-                                min_bound=(-max_coord_crop, 0, -max_coord_crop),
-                                max_bound=(
-                                    max_coord_crop,
-                                    max_coord_crop,
-                                    max_coord_crop,
-                                ),
+                        # find the center of the point cloud
+                        center = pcd_complete.get_center()
+
+                        # translate the point cloud so that its center is at the origin
+                        pcd_complete = pcd_complete.translate(-center)
+
+                        num_points_partial = num_points // 5
+                        pcd_partial_list = []
+                        for view_id in range(view_id_count):
+                            pcd_partial = sample_points_from_mesh(
+                                mesh,
+                                num_points_partial,
+                                translate=-center,
+                                view_id=view_id,
                             )
-                        )
+                            pcd_partial_list.append(pcd_partial)
 
                         # save the point cloud
-                        # get parent directory
-                        output_parent_dir_complete = os.path.dirname(
-                            output_file_path_complete
-                        )
-                        if not os.path.exists(output_parent_dir_complete):
-                            os.makedirs(output_parent_dir_complete)
-                        output_parent_dir_partial = os.path.dirname(
-                            output_file_path_partial
-                        )
-                        if not os.path.exists(output_parent_dir_partial):
-                            os.makedirs(output_parent_dir_partial)
+                        if not os.path.exists(output_file_dir_complete):
+                            os.makedirs(output_file_dir_complete)
+                        if not os.path.exists(output_file_dir_partial):
+                            os.makedirs(output_file_dir_partial)
                         o3d.io.write_point_cloud(
-                            output_file_path_complete,
-                            pcd_complete,
+                            output_file_path_complete, pcd_complete, write_ascii=True
                         )
-                        o3d.io.write_point_cloud(
-                            output_file_path_partial,
-                            pcd_partial,
-                        )
+                        for i, (output_file_path_partial, pcd_partial) in enumerate(
+                            zip(output_file_path_partial_list, pcd_partial_list)
+                        ):
+                            o3d.io.write_point_cloud(
+                                output_file_path_partial, pcd_partial, write_ascii=True
+                            )
 
                     except Exception as e:
                         print(f"Error processing {os.path.join(root, file)}: {e}")
@@ -131,7 +148,7 @@ def preprocess_mesh_dir(input_dir, output_dir, num_points, class_id, pbar):
                         pbar.update(1)
                         continue
 
-                file_names.append(output_file_name)
+                file_names.append(input_file_name)
                 pbar.update(1)
 
     return file_names, error_file_paths
@@ -202,7 +219,7 @@ if __name__ == "__main__":
         "--output_dir", type=str, help="output directory", required=True
     )
     parser.add_argument(
-        "--num_points", type=int, default=10000, help="number of points to sample"
+        "--num_points", type=int, default=16384, help="number of points to sample"
     )
     parser.add_argument(
         "--class_name", type=str, help="dataset class name", required=True
