@@ -51,6 +51,7 @@ def custom_collate_fn(batch):
 def dataset_builder(args, config):
     dataset = build_dataset_from_cfg(config._base_, config.others)
     shuffle = config.others.subset == 'train'
+    dataset_name = config.dataset.test._base_.NAME # this is for shapenet part
     if args.distributed:
         sampler = torch.utils.data.distributed.DistributedSampler(dataset, shuffle = shuffle)
         dataloader = torch.utils.data.DataLoader(dataset, batch_size = config.others.bs if shuffle else 1,
@@ -58,7 +59,7 @@ def dataset_builder(args, config):
                                             drop_last = config.others.subset == 'train',
                                             worker_init_fn = worker_init_fn,
                                             sampler = sampler,
-                                            collate_fn=custom_collate_fn
+                                            collate_fn=custom_collate_fn if dataset_name == 'ShapeNetPart' else None
                                             )
     else:
         sampler = None
@@ -67,7 +68,7 @@ def dataset_builder(args, config):
                                                 drop_last = config.others.subset == 'train',
                                                 num_workers = int(args.num_workers),
                                                 worker_init_fn=worker_init_fn,
-                                                collate_fn=custom_collate_fn
+                                                collate_fn=custom_collate_fn if dataset_name == 'ShapeNetPart' else None
                                                 )
     return sampler, dataloader
 
