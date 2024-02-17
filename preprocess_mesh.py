@@ -151,7 +151,7 @@ def preprocess_mesh_dir(
                         pcd_complete = pcd_complete.translate(-center)
 
                         # nomalize the point cloud to fit in a unit sphere
-                        scale_factor = 1 / np.max(pcd_complete.get_max_bound())
+                        scale_factor = 0.5 / np.max(pcd_complete.get_max_bound())
                         pcd_complete.scale(scale=scale_factor, center=(0, 0, 0))
 
                         num_points_partial = num_points // 5
