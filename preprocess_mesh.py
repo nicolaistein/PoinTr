@@ -189,22 +189,23 @@ def preprocess_mesh(input_dir, output_dir, num_points, class_name, class_id):
             input_dir_class_test, output_dir_class_test, num_points, class_id, pbar
         )
 
-        json_data = [
-            {
-                "taxonomy_id": (class_id + ""),
-                "taxonomy_name": class_name,
-                "train": file_names_train,
-                "val": file_names_val,
-                "test": file_names_test,
-            }
-        ]
+    json_data = [
+        {
+            "taxonomy_id": (class_id + ""),
+            "taxonomy_name": class_name,
+            "train": file_names_train,
+            "val": file_names_val,
+            "test": file_names_test,
+        }
+    ]
 
-        with open(os.path.join(output_dir, "ModelNet.json"), "w") as f:
-            json.dump(json_data, f)
+    with open(os.path.join(output_dir, "ModelNet.json"), "w") as f:
+        json.dump(json_data, f)
+    print("ModelNet.json file created")
 
-        error_file_paths = (
-            error_file_paths_train + error_file_paths_val + error_file_paths_test
-        )
+    error_file_paths = (
+        error_file_paths_train + error_file_paths_val + error_file_paths_test
+    )
 
     if error_file_paths:
         print("Error processing the following files:")
@@ -228,5 +229,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     preprocess_mesh(
-        args.input_dir, args.output_dir, args.num_points, args.class_name, args.class_id
+        args.input_dir,
+        args.output_dir,
+        args.num_points,
+        args.class_name,
+        args.class_id,
     )
