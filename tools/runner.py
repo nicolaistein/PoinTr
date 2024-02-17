@@ -106,6 +106,9 @@ def run_net(args, config, train_writer=None, val_writer=None):
                 gt = data.cuda()
                 partial, _ = misc.seprate_point_cloud(gt, npoints, [int(npoints * 1/4) , int(npoints * 3/4)], fixed_points = None)
                 partial = partial.cuda()
+            elif dataset_name == "ShapeNetPart":
+                gt = data['gt'].cuda()
+                partial = data['partial'].cuda()
             else:
                 raise NotImplementedError(f'Train phase do not support {dataset_name}')
 
@@ -206,6 +209,10 @@ def validate(base_model, test_dataloader, epoch, ChamferDisL1, ChamferDisL2, val
                 gt = data.cuda()
                 partial, _ = misc.seprate_point_cloud(gt, npoints, [int(npoints * 1/4) , int(npoints * 3/4)], fixed_points = None)
                 partial = partial.cuda()
+            elif dataset_name == "ShapeNetPart":
+                gt = data['gt'].cuda()
+                partial = data['partial'].cuda()
+
             else:
                 raise NotImplementedError(f'Train phase do not support {dataset_name}')
 

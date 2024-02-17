@@ -1,0 +1,9 @@
+NAME: ShapeNetPart
+CATEGORY_FILE_PATH: data/ShapeNetPart/ShapeNet.json
+N_POINTS: 800
+N_RENDERINGS: 1 # Assuming you have one rendering per model, update this as needed
+PARTIAL_POINTS_PATH: data/ShapeNetPart/{}/partial/{}/{}.pcd
+COMPLETE_POINTS_PATH: data/ShapeNetPart/{}/complete/{}/{}.pcd
+SEGMENTATION_LABEL_PATH: data/shapenetcore_partanno_segmentation_benchmark_v0_normal
+AIRPLANES: TRUE
+CARS: FALSE

@@ -11,6 +11,43 @@ from models import build_model_from_cfg
 from utils.logger import *
 from utils.misc import *
 
+def pad_tensors(tensor_list):
+    max_len = max(tensor.shape[0] for tensor in tensor_list)
+    padded_tensors = []
+    for tensor in tensor_list:
+        pad_size = max_len - tensor.shape[0]
+        if pad_size > 0:
+            padded_tensor = torch.nn.functional.pad(tensor, (0, 0, 0, pad_size), "constant", 0)
+            padded_tensors.append(padded_tensor)
+        else:
+            padded_tensors.append(tensor)
+    return torch.stack(padded_tensors)
+def custom_collate_fn(batch):
+    # Initialize lists to hold processed data
+    model_ids = []
+    partials = []
+    gts = []
+
+    # Process each item in the batch
+    for item in batch:
+        model_id, (partial, gt) = item  # Corrected unpacking
+        model_ids.append(model_id)
+        partials.append(partial)
+        gts.append(gt)
+
+    # Pad partials and gts to have the same size in the batch
+    partials_padded = pad_tensors(partials)
+    gts_padded = pad_tensors(gts)
+
+    # Since taxonomy_ids are not used, you can omit them or keep them as None if required for consistency
+    taxonomy_ids = ["02691156"] * len(batch)
+
+    return taxonomy_ids, model_ids, {'partial': partials_padded, 'gt': gts_padded}
+
+
+
+
+
 def dataset_builder(args, config):
     dataset = build_dataset_from_cfg(config._base_, config.others)
     shuffle = config.others.subset == 'train'
@@ -20,14 +57,18 @@ def dataset_builder(args, config):
                                             num_workers = int(args.num_workers),
                                             drop_last = config.others.subset == 'train',
                                             worker_init_fn = worker_init_fn,
-                                            sampler = sampler)
+                                            sampler = sampler,
+                                            collate_fn=custom_collate_fn
+                                            )
     else:
         sampler = None
         dataloader = torch.utils.data.DataLoader(dataset, batch_size=config.others.bs if shuffle else 1,
                                                 shuffle = shuffle, 
                                                 drop_last = config.others.subset == 'train',
                                                 num_workers = int(args.num_workers),
-                                                worker_init_fn=worker_init_fn)
+                                                worker_init_fn=worker_init_fn,
+                                                collate_fn=custom_collate_fn
+                                                )
     return sampler, dataloader
 
 def model_builder(config):
