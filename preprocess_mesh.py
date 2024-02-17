@@ -8,7 +8,9 @@ import open3d as o3d
 from tqdm import tqdm
 
 
-def sample_points_from_mesh(mesh, num_points, translate=None, view_id=None):
+def sample_points_from_mesh(
+    mesh, num_points, translate=None, view_id=None, scale_factor=1.0
+):
     pcd = mesh.sample_points_uniformly(
         # pcd = mesh.sample_points_poisson_disk(
         number_of_points=num_points
@@ -16,6 +18,8 @@ def sample_points_from_mesh(mesh, num_points, translate=None, view_id=None):
 
     if translate is not None:
         pcd = pcd.translate(translate)
+
+    pcd.scale(scale=scale_factor, center=(0, 0, 0))
 
     if view_id is not None:
         # perform a cut along the a plane
@@ -41,7 +45,9 @@ def sample_points_from_mesh(mesh, num_points, translate=None, view_id=None):
     return pcd
 
 
-def preprocess_mesh_dir(input_dir, output_dir, num_points, class_id, pbar):
+def preprocess_mesh_dir(
+    input_dir, output_dir, num_points, class_id, pbar, overwrite_files
+):
     view_id_count = 6
 
     file_names = []
@@ -81,8 +87,11 @@ def preprocess_mesh_dir(input_dir, output_dir, num_points, class_id, pbar):
                 ]
 
                 # check if any of the output files do not exist already
-                if not os.path.exists(output_file_path_complete) or not all(
-                    [os.path.exists(p) for p in output_file_path_partial_list]
+                if overwrite_files or (
+                    not os.path.exists(output_file_path_complete)
+                    or not all(
+                        [os.path.exists(p) for p in output_file_path_partial_list]
+                    )
                 ):
                     try:
                         # read the mesh
@@ -116,6 +125,10 @@ def preprocess_mesh_dir(input_dir, output_dir, num_points, class_id, pbar):
                         # translate the point cloud so that its center is at the origin
                         pcd_complete = pcd_complete.translate(-center)
 
+                        # nomalize the point cloud to fit in a unit sphere
+                        scale_factor = 1 / np.max(pcd_complete.get_max_bound())
+                        pcd_complete.scale(scale=scale_factor, center=(0, 0, 0))
+
                         num_points_partial = num_points // 5
                         pcd_partial_list = []
                         for view_id in range(view_id_count):
@@ -124,6 +137,7 @@ def preprocess_mesh_dir(input_dir, output_dir, num_points, class_id, pbar):
                                 num_points_partial,
                                 translate=-center,
                                 view_id=view_id,
+                                scale_factor=scale_factor,
                             )
                             pcd_partial_list.append(pcd_partial)
 
@@ -154,7 +168,9 @@ def preprocess_mesh_dir(input_dir, output_dir, num_points, class_id, pbar):
     return file_names, error_file_paths
 
 
-def preprocess_mesh(input_dir, output_dir, num_points, class_name, class_id):
+def preprocess_mesh(
+    input_dir, output_dir, num_points, class_name, class_id, overwrite_files
+):
     np.random.seed(0)
 
     error_file_paths = []
@@ -180,13 +196,28 @@ def preprocess_mesh(input_dir, output_dir, num_points, class_name, class_id):
 
     with tqdm(total=file_count, desc="Processing files") as pbar:
         file_names_train, error_file_paths_train = preprocess_mesh_dir(
-            input_dir_class_train, output_dir_class_train, num_points, class_id, pbar
+            input_dir_class_train,
+            output_dir_class_train,
+            num_points,
+            class_id,
+            pbar,
+            overwrite_files,
         )
         file_names_val, error_file_paths_val = preprocess_mesh_dir(
-            input_dir_class_val, output_dir_class_val, num_points, class_id, pbar
+            input_dir_class_val,
+            output_dir_class_val,
+            num_points,
+            class_id,
+            pbar,
+            overwrite_files,
         )
         file_names_test, error_file_paths_test = preprocess_mesh_dir(
-            input_dir_class_test, output_dir_class_test, num_points, class_id, pbar
+            input_dir_class_test,
+            output_dir_class_test,
+            num_points,
+            class_id,
+            pbar,
+            overwrite_files,
         )
 
     json_data = [
@@ -226,6 +257,9 @@ if __name__ == "__main__":
         "--class_name", type=str, help="dataset class name", required=True
     )
     parser.add_argument("--class_id", type=str, help="dataset class id", required=True)
+    parser.add_argument(
+        "-O", "--overwrite_files", action="store_true", help="overwrite existing files"
+    )
     args = parser.parse_args()
 
     preprocess_mesh(
@@ -234,4 +268,5 @@ if __name__ == "__main__":
         args.num_points,
         args.class_name,
         args.class_id,
+        args.overwrite_files,
     )
