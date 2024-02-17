@@ -130,9 +130,11 @@ def preprocess_mesh_dir(
                         # center mesh
                         mesh = mesh.translate(-mesh.get_center())
                         # normalize mesh to fit in a unit sphere
-                        mesh.scale(1 / np.max(mesh.get_max_bound()), center=(0, 0, 0))
+                        mesh = mesh.scale(
+                            0.5 / np.max(np.abs(mesh.get_max_bound())), center=(0, 0, 0)
+                        )
 
-                        mesh.rotate(
+                        mesh = mesh.rotate(
                             mesh.get_rotation_matrix_from_xyz((-np.pi / 2, 0, 0)),
                             center=(0, 0, 0),
                         )
@@ -151,7 +153,7 @@ def preprocess_mesh_dir(
                         pcd_complete = pcd_complete.translate(-center)
 
                         # nomalize the point cloud to fit in a unit sphere
-                        scale_factor = 0.5 / np.max(pcd_complete.get_max_bound())
+                        scale_factor = 1 / np.max(np.abs(pcd_complete.get_max_bound()))
                         pcd_complete.scale(scale=scale_factor, center=(0, 0, 0))
 
                         num_points_partial = num_points // 5
@@ -203,70 +205,80 @@ def preprocess_mesh_dir(
 
 
 def preprocess_mesh(
-    input_dir, output_dir, num_points, class_name, class_id, overwrite_files
+    input_dir, output_dir, num_points, class_ids, overwrite_files, no_val
 ):
     np.random.seed(0)
 
     error_file_paths = []
+    json_data = []
 
-    input_dir_class = os.path.join(input_dir, class_name)
-    input_dir_class_train = os.path.join(input_dir_class, "train")
-    input_dir_class_val = os.path.join(input_dir_class, "val")
-    input_dir_class_test = os.path.join(input_dir_class, "test")
+    for i, class_id in enumerate(class_ids):
+        print(f"Processing class '{class_id}' [{i+1}/{len(class_ids)}]:")
 
-    output_dir_class = output_dir
-    output_dir_class_train = os.path.join(output_dir_class, "train")
-    output_dir_class_val = os.path.join(output_dir_class, "val")
-    output_dir_class_test = os.path.join(output_dir_class, "test")
+        input_dir_class = os.path.join(input_dir, class_id)
+        input_dir_class_train = os.path.join(input_dir_class, "train")
+        input_dir_class_val = os.path.join(input_dir_class, "val")
+        input_dir_class_test = os.path.join(input_dir_class, "test")
 
-    # count files in input_dir_class_test and input_dir_class_train directories
-    file_count = 0
-    for root, dirs, files in os.walk(input_dir_class_test):
-        file_count += len(files)
-    for root, dirs, files in os.walk(input_dir_class_val):
-        file_count += len(files)
-    for root, dirs, files in os.walk(input_dir_class_train):
-        file_count += len(files)
+        output_dir_class = output_dir
+        output_dir_class_train = os.path.join(output_dir_class, "train")
+        output_dir_class_val = os.path.join(output_dir_class, "val")
+        output_dir_class_test = os.path.join(output_dir_class, "test")
 
-    with tqdm(total=file_count, desc="Processing files") as pbar:
-        file_names_train, error_file_paths_train = preprocess_mesh_dir(
-            input_dir_class_train,
-            output_dir_class_train,
-            num_points,
-            class_id,
-            pbar,
-            overwrite_files,
-        )
-        file_names_val, error_file_paths_val = preprocess_mesh_dir(
-            input_dir_class_val,
-            output_dir_class_val,
-            num_points,
-            class_id,
-            pbar,
-            overwrite_files,
-        )
-        file_names_test, error_file_paths_test = preprocess_mesh_dir(
-            input_dir_class_test,
-            output_dir_class_test,
-            num_points,
-            class_id,
-            pbar,
-            overwrite_files,
-        )
+        # count files in input_dir_class_test and input_dir_class_train directories
+        file_count = 0
+        for root, dirs, files in os.walk(input_dir_class_test):
+            file_count += len(files)
+        if not no_val:
+            for root, dirs, files in os.walk(input_dir_class_val):
+                file_count += len(files)
+        for root, dirs, files in os.walk(input_dir_class_train):
+            file_count += len(files)
 
-    json_data = [
-        {
-            "taxonomy_id": (class_id + ""),
-            "taxonomy_name": class_name,
+        with tqdm(total=file_count, desc="Processing files") as pbar:
+            file_names_train, error_file_paths_train = preprocess_mesh_dir(
+                input_dir_class_train,
+                output_dir_class_train,
+                num_points,
+                class_id,
+                pbar,
+                overwrite_files,
+            )
+            file_names_val, error_file_paths_val = [], []
+            if not no_val:
+                file_names_val, error_file_paths_val = preprocess_mesh_dir(
+                    input_dir_class_val,
+                    output_dir_class_val,
+                    num_points,
+                    class_id,
+                    pbar,
+                    overwrite_files,
+                )
+            file_names_test, error_file_paths_test = preprocess_mesh_dir(
+                input_dir_class_test,
+                output_dir_class_test,
+                num_points,
+                class_id,
+                pbar,
+                overwrite_files,
+            )
+
+        class_json_data = {
+            "taxonomy_id": class_id,
+            "taxonomy_name": class_id,
             "train": file_names_train,
-            "val": file_names_val,
             "test": file_names_test,
         }
-    ]
+        if not no_val:
+            class_json_data["val"] = file_names_val
 
-    with open(os.path.join(output_dir, "ModelNet.json"), "w") as f:
+        json_data.append(class_json_data)
+
+    json_file_name = "ModelNet.json"
+
+    with open(os.path.join(output_dir, json_file_name), "w") as f:
         json.dump(json_data, f)
-    print("ModelNet.json file created")
+    print(f"{json_file_name} file created")
 
     global total_complete_point_clouds
     global total_complete_point_cloud_points
@@ -307,19 +319,24 @@ if __name__ == "__main__":
         "--num_points", type=int, default=16384, help="number of points to sample"
     )
     parser.add_argument(
-        "--class_name", type=str, help="dataset class name", required=True
+        "--class_ids", type=str, help="comma-separated list of class IDs", required=True
     )
-    parser.add_argument("--class_id", type=str, help="dataset class id", required=True)
     parser.add_argument(
         "-O", "--overwrite_files", action="store_true", help="overwrite existing files"
     )
+    parser.add_argument(
+        "--no_val", action="store_true", help="do not export validation set"
+    )
     args = parser.parse_args()
+
+    class_ids = args.class_ids.split(",")
+    print(f"Class IDs: {class_ids}")
 
     preprocess_mesh(
         args.input_dir,
         args.output_dir,
         args.num_points,
-        args.class_name,
-        args.class_id,
+        class_ids,
         args.overwrite_files,
+        args.no_val,
     )
