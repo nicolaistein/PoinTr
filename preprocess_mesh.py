@@ -2,53 +2,83 @@ import argparse
 from calendar import c
 import json
 import os
+from flask import g
+import imageio
 import numpy as np
 
 import open3d as o3d
+from sympy import rad
 from tqdm import tqdm
 
 
-def sample_points_from_mesh(
-    mesh, num_points, translate=None, view_id=None, scale_factor=1.0
+def np_array_to_uin8_image(x):
+    img = np.clip(np.rint(x * 255), 0, 255).astype(np.uint8)
+    if img.shape[-1] == 1:
+        img = np.repeat(img, 3, axis=-1)
+    return img
+
+
+def sample_projected_point_cloud_from_mesh(
+    mesh_tensor, num_points, translate=None, scale_factor=1.0
 ):
-    pcd = mesh.sample_points_uniformly(
-        # pcd = mesh.sample_points_poisson_disk(
-        number_of_points=num_points
+    scene = o3d.t.geometry.RaycastingScene()
+    scene.add_triangles(mesh_tensor)
+    # sphere = o3d.geometry.TriangleMesh.create_sphere(radius=10).translate((0, 0, 0))
+    # sphere_tensor = o3d.t.geometry.TriangleMesh.from_legacy(sphere)
+    # scene.add_triangles(sphere_tensor)
+
+    # create random eye vector
+    eye = np.random.randn(3)
+    eye /= np.linalg.norm(eye)
+    eye *= 5
+
+    rays = o3d.t.geometry.RaycastingScene.create_rays_pinhole(
+        fov_deg=35,
+        center=[0, 0, 0],
+        eye=eye,
+        up=[0, 1, 0],
+        width_px=190,
+        height_px=190,
     )
+    # We can directly pass the rays tensor to the cast_rays function.
+    ans = scene.cast_rays(rays)
+
+    hit = ans["t_hit"].isfinite()
+    points = rays[hit][:, :3] + rays[hit][:, 3:] * ans["t_hit"][hit].reshape((-1, 1))
+    pcd = o3d.t.geometry.PointCloud(points).to_legacy()
 
     if translate is not None:
         pcd = pcd.translate(translate)
 
     pcd.scale(scale=scale_factor, center=(0, 0, 0))
 
-    if view_id is not None:
-        # perform a cut along the a plane
-        max_coord_crop = 1000000
+    return pcd
 
-        crop_coords = [
-            -max_coord_crop,
-            -max_coord_crop,
-            -max_coord_crop,
-            max_coord_crop,
-            max_coord_crop,
-            max_coord_crop,
-        ]
-        crop_coords[view_id] = 0
 
-        pcd = pcd.crop(
-            o3d.geometry.AxisAlignedBoundingBox(
-                min_bound=(crop_coords[0], crop_coords[1], crop_coords[2]),
-                max_bound=(crop_coords[3], crop_coords[4], crop_coords[5]),
-            )
-        )
+def sample_uniform_point_cloud_from_mesh(mesh, num_points):
+    pcd = mesh.sample_points_uniformly(
+        # pcd = mesh.sample_points_poisson_disk(
+        number_of_points=num_points
+    )
 
     return pcd
 
 
+total_complete_point_clouds = 0
+total_complete_point_cloud_points = 0
+total_partial_point_clouds = 0
+total_partial_point_cloud_points = 0
+
+
 def preprocess_mesh_dir(
-    input_dir, output_dir, num_points, class_id, pbar, overwrite_files
+    input_dir,
+    output_dir,
+    num_points,
+    class_id,
+    pbar,
+    overwrite_files,
 ):
-    view_id_count = 6
+    view_id_count = 8
 
     file_names = []
     error_file_paths = []
@@ -97,8 +127,22 @@ def preprocess_mesh_dir(
                         # read the mesh
                         mesh = o3d.io.read_triangle_mesh(os.path.join(root, file))
 
+                        # center mesh
+                        mesh = mesh.translate(-mesh.get_center())
+                        # normalize mesh to fit in a unit sphere
+                        mesh.scale(1 / np.max(mesh.get_max_bound()), center=(0, 0, 0))
+
+                        mesh.rotate(
+                            mesh.get_rotation_matrix_from_xyz((-np.pi / 2, 0, 0)),
+                            center=(0, 0, 0),
+                        )
+
+                        mesh_tensor = o3d.t.geometry.TriangleMesh.from_legacy(mesh)
+
                         # sample points from the mesh
-                        pcd_complete = sample_points_from_mesh(mesh, num_points)
+                        pcd_complete = sample_uniform_point_cloud_from_mesh(
+                            mesh, num_points
+                        )
 
                         # find the center of the point cloud
                         center = pcd_complete.get_center()
@@ -113,11 +157,10 @@ def preprocess_mesh_dir(
                         num_points_partial = num_points // 5
                         pcd_partial_list = []
                         for view_id in range(view_id_count):
-                            pcd_partial = sample_points_from_mesh(
-                                mesh,
+                            pcd_partial = sample_projected_point_cloud_from_mesh(
+                                mesh_tensor,
                                 num_points_partial,
                                 translate=-center,
-                                view_id=view_id,
                                 scale_factor=scale_factor,
                             )
                             pcd_partial_list.append(pcd_partial)
@@ -136,6 +179,16 @@ def preprocess_mesh_dir(
                             o3d.io.write_point_cloud(
                                 output_file_path_partial, pcd_partial, write_ascii=True
                             )
+
+                        global total_complete_point_clouds
+                        global total_complete_point_cloud_points
+                        global total_partial_point_clouds
+                        global total_partial_point_cloud_points
+                        total_complete_point_clouds += 1
+                        total_complete_point_cloud_points += len(pcd_complete.points)
+                        for pcd in pcd_partial_list:
+                            total_partial_point_clouds += 1
+                            total_partial_point_cloud_points += len(pcd.points)
 
                     except Exception as e:
                         print(f"Error processing {os.path.join(root, file)}: {e}")
@@ -214,6 +267,25 @@ def preprocess_mesh(
     with open(os.path.join(output_dir, "ModelNet.json"), "w") as f:
         json.dump(json_data, f)
     print("ModelNet.json file created")
+
+    global total_complete_point_clouds
+    global total_complete_point_cloud_points
+    global total_partial_point_clouds
+    global total_partial_point_cloud_points
+    if total_complete_point_clouds > 0:
+        average_complete_point_cloud_points = (
+            total_complete_point_cloud_points / total_complete_point_clouds
+        )
+        print(
+            f"Average number of points in complete point clouds: {average_complete_point_cloud_points}"
+        )
+    if total_partial_point_clouds > 0:
+        average_partial_point_cloud_points = (
+            total_partial_point_cloud_points / total_partial_point_clouds
+        )
+        print(
+            f"Average number of points in partial point clouds: {average_partial_point_cloud_points}"
+        )
 
     error_file_paths = (
         error_file_paths_train + error_file_paths_val + error_file_paths_test
