@@ -97,25 +97,6 @@ def preprocess_mesh_dir(
                         # read the mesh
                         mesh = o3d.io.read_triangle_mesh(os.path.join(root, file))
 
-                        # Note: normal computation is not working
-                        # # compute the normals of the triangles
-                        # mesh.compute_vertex_normals()
-                        # mesh.compute_triangle_normals()
-                        # triangle_normals = np.asarray(mesh.triangle_normals)
-
-                        # # generate a random view direction
-                        # view_dir = np.random.randn(3)
-                        # view_dir /= np.linalg.norm(view_dir)
-
-                        # # compute the dot product between the view direction and the triangle normals
-                        # dot_products = np.dot(triangle_normals, view_dir)
-
-                        # # remove all triangles not facing the view direction
-                        # mesh.triangles = o3d.utility.Vector3iVector(
-                        #     np.asarray(mesh.triangles)[dot_products > 0, :]
-                        # )
-                        # # mesh.remove_triangles_by_mask(dot_products <= 0)
-
                         # sample points from the mesh
                         pcd_complete = sample_points_from_mesh(mesh, num_points)
 
