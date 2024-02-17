@@ -150,5 +150,6 @@ data/ShapeNet55-34/projected_partial_noise
 inference_result/
 
 .idea
+data/ModelNet
 data/ModelNet10
 data/ModelNet40

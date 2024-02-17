@@ -425,7 +425,12 @@ def validate(
         msg += str(category_metrics[taxonomy_id].count(0)) + "\t"
         for value in category_metrics[taxonomy_id].avg():
             msg += "%.3f \t" % value
-        msg += shapenet_dict[taxonomy_id] + "\t"
+
+        if dataset_name == "ModelNet":
+            msg += taxonomy_id + "\t"
+        else:
+            msg += shapenet_dict[taxonomy_id] + "\t"
+
         print_log(msg, logger=logger)
 
     msg = ""
