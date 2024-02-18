@@ -125,8 +125,29 @@ def preprocess_mesh_dir(
                     )
                 ):
                     try:
+                        input_file_path = os.path.join(root, file)
+
+                        off_file_header = "OFF"
+                        # check off file header
+                        file_lines = []
+                        with open(input_file_path, "r") as f:
+                            file_lines = f.readlines()
+                        if file_lines[0] != f"{off_file_header}\n":
+                            if file_lines[0].startswith(off_file_header):
+                                # fix header
+                                file_lines[0] = file_lines[0][3:]
+                                file_lines.insert(0, "OFF\n")
+                                with open(input_file_path, "w") as fout:
+                                    contents = "".join(file_lines)
+                                    fout.write(contents)
+                                print("Fixed OFF header in", input_file_path)
+                            else:
+                                raise Exception(
+                                    f"First line of {input_file_path} is not 'OFF'"
+                                )
+
                         # read the mesh
-                        mesh = o3d.io.read_triangle_mesh(os.path.join(root, file))
+                        mesh = o3d.io.read_triangle_mesh(input_file_path)
 
                         # center mesh
                         mesh = mesh.translate(-mesh.get_center())
