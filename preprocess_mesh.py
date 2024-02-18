@@ -1,13 +1,9 @@
 import argparse
-from calendar import c
 import json
 import os
-from flask import g
-import imageio
-import numpy as np
 
+import numpy as np
 import open3d as o3d
-from sympy import rad
 from tqdm import tqdm
 
 
@@ -19,7 +15,7 @@ def np_array_to_uin8_image(x):
 
 
 def sample_projected_point_cloud_from_mesh(
-    mesh_tensor, num_points, translate=None, scale_factor=1.0
+    mesh_tensor, partial_points_multiplier, translate=None, scale_factor=1.0
 ):
     scene = o3d.t.geometry.RaycastingScene()
     scene.add_triangles(mesh_tensor)
@@ -32,13 +28,17 @@ def sample_projected_point_cloud_from_mesh(
     eye /= np.linalg.norm(eye)
     eye *= 5
 
+    pixel_multiplier = np.sqrt(partial_points_multiplier)
+    width_px = round(190 * pixel_multiplier)
+    height_px = round(190 * pixel_multiplier)
+
     rays = o3d.t.geometry.RaycastingScene.create_rays_pinhole(
         fov_deg=35,
         center=[0, 0, 0],
         eye=eye,
         up=[0, 1, 0],
-        width_px=190,
-        height_px=190,
+        width_px=width_px,
+        height_px=height_px,
     )
     # We can directly pass the rays tensor to the cast_rays function.
     ans = scene.cast_rays(rays)
@@ -74,6 +74,7 @@ def preprocess_mesh_dir(
     input_dir,
     output_dir,
     num_points,
+    partial_points_multiplier,
     class_id,
     pbar,
     overwrite_files,
@@ -156,12 +157,12 @@ def preprocess_mesh_dir(
                         scale_factor = 1 / np.max(np.abs(pcd_complete.get_max_bound()))
                         pcd_complete.scale(scale=scale_factor, center=(0, 0, 0))
 
-                        num_points_partial = num_points // 5
+                        # num_points_partial = num_points // 5
                         pcd_partial_list = []
                         for view_id in range(view_id_count):
                             pcd_partial = sample_projected_point_cloud_from_mesh(
                                 mesh_tensor,
-                                num_points_partial,
+                                partial_points_multiplier,
                                 translate=-center,
                                 scale_factor=scale_factor,
                             )
@@ -205,7 +206,13 @@ def preprocess_mesh_dir(
 
 
 def preprocess_mesh(
-    input_dir, output_dir, num_points, class_ids, overwrite_files, no_val
+    input_dir,
+    output_dir,
+    num_points,
+    partial_points_multiplier,
+    class_ids,
+    overwrite_files,
+    no_val,
 ):
     np.random.seed(0)
 
@@ -240,6 +247,7 @@ def preprocess_mesh(
                 input_dir_class_train,
                 output_dir_class_train,
                 num_points,
+                partial_points_multiplier,
                 class_id,
                 pbar,
                 overwrite_files,
@@ -250,6 +258,7 @@ def preprocess_mesh(
                     input_dir_class_val,
                     output_dir_class_val,
                     num_points,
+                    partial_points_multiplier,
                     class_id,
                     pbar,
                     overwrite_files,
@@ -258,6 +267,7 @@ def preprocess_mesh(
                 input_dir_class_test,
                 output_dir_class_test,
                 num_points,
+                partial_points_multiplier,
                 class_id,
                 pbar,
                 overwrite_files,
@@ -319,6 +329,12 @@ if __name__ == "__main__":
         "--num_points", type=int, default=16384, help="number of points to sample"
     )
     parser.add_argument(
+        "--partial_points_multiplier",
+        type=float,
+        default=1.0,
+        help="multiplier for the number of points to sample for partial point clouds",
+    )
+    parser.add_argument(
         "--class_ids", type=str, help="comma-separated list of class IDs", required=True
     )
     parser.add_argument(
@@ -336,6 +352,7 @@ if __name__ == "__main__":
         args.input_dir,
         args.output_dir,
         args.num_points,
+        args.partial_points_multiplier,
         class_ids,
         args.overwrite_files,
         args.no_val,
