@@ -11,38 +11,52 @@ from models import build_model_from_cfg
 from utils.logger import *
 from utils.misc import *
 
-def pad_tensors(tensor_list):
+def pad_tensors(tensor_list, pad_value=0):
+    """Pad a list of tensors to the same size with a pad value."""
     max_len = max(tensor.shape[0] for tensor in tensor_list)
     padded_tensors = []
     for tensor in tensor_list:
         pad_size = max_len - tensor.shape[0]
         if pad_size > 0:
-            padded_tensor = torch.nn.functional.pad(tensor, (0, 0, 0, pad_size), "constant", 0)
+            # Pad the last dimension if it's a 2D tensor (e.g., point cloud data)
+            if tensor.dim() > 1:
+                padded_tensor = torch.nn.functional.pad(tensor, (0, 0, 0, pad_size), "constant", pad_value)
+            # Pad the tensor directly if it's a 1D tensor (e.g., labels)
+            else:
+                padded_tensor = torch.nn.functional.pad(tensor, (0, pad_size), "constant", pad_value)
             padded_tensors.append(padded_tensor)
         else:
             padded_tensors.append(tensor)
     return torch.stack(padded_tensors)
+
 def custom_collate_fn(batch):
+    """Custom collate function to process and pad batch data for ShapeNetPart dataset."""
     # Initialize lists to hold processed data
     model_ids = []
     partials = []
     gts = []
+    labels = []
 
     # Process each item in the batch
     for item in batch:
-        model_id, (partial, gt) = item  # Corrected unpacking
+        model_id, (partial, gt, label) = item
         model_ids.append(model_id)
         partials.append(partial)
         gts.append(gt)
+        labels.append(label)
 
     # Pad partials and gts to have the same size in the batch
     partials_padded = pad_tensors(partials)
     gts_padded = pad_tensors(gts)
 
+    # Pad labels, assuming labels are a 1D tensor and using a default padding value if necessary
+    labels_padded = pad_tensors(labels, pad_value=-1)  # Use -1 or an appropriate value that indicates padding
+
     # Since taxonomy_ids are not used, you can omit them or keep them as None if required for consistency
     taxonomy_ids = ["02691156"] * len(batch)
 
-    return taxonomy_ids, model_ids, {'partial': partials_padded, 'gt': gts_padded}
+    # Return a dictionary with padded tensors
+    return taxonomy_ids, model_ids, {'partial': partials_padded, 'gt': gts_padded, 'labels': labels_padded}
 
 
 
@@ -51,7 +65,7 @@ def custom_collate_fn(batch):
 def dataset_builder(args, config):
     dataset = build_dataset_from_cfg(config._base_, config.others)
     shuffle = config.others.subset == 'train'
-    dataset_name = config.dataset.test._base_.NAME # this is for shapenet part
+    dataset_name = config._base_.NAME # this is for shapenet part
     if args.distributed:
         sampler = torch.utils.data.distributed.DistributedSampler(dataset, shuffle = shuffle)
         dataloader = torch.utils.data.DataLoader(dataset, batch_size = config.others.bs if shuffle else 1,

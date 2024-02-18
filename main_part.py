@@ -65,12 +65,11 @@ def main():
             
             partials = data['partial'].to(device)
             gts = data['gt'].to(device)
-            labels = data['labels'].to(device)
+            labels = data['labels'].to(device).long()
 
             optimizer.zero_grad()
             outputs = model(partials)
-            print("Outputs are produced")
-            loss = loss_function(outputs, labels)
+            loss = loss_function(outputs.transpose(1, 2), labels)
             loss.backward()
             optimizer.step()
 
