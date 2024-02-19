@@ -11,6 +11,22 @@ from extensions.chamfer_dist import ChamferDistanceL1
 from .build import MODELS, build_model_from_cfg
 from models.Transformer_utils import *
 from utils import misc
+from enum import Enum, auto
+
+
+# Define an enumeration for class labels
+class ClassLabels(Enum):
+    BUMPER = auto()
+    LIGHTS = auto()
+    WHEELS = auto()
+    DOORS = auto()
+    WINDOWS = auto()
+    ROOF = auto()
+    MIRROR = auto()
+    HOOD = auto()
+    TRUNK = auto()
+    FENDER = auto()
+
 
 class SelfAttnBlockApi(nn.Module):
     r'''
@@ -507,6 +523,179 @@ class PointTransformerDecoderEntry(PointTransformerDecoder):
         super().__init__(**dict(config))
 
 ######################################## Grouper ########################################  
+        
+class GeomGCNN_Grouper(nn.Module):
+    def __init__(self, k = 16):
+        super().__init__()
+        '''
+        K has to be 16
+        '''
+        print('using group version 2')
+        self.k = k
+        # self.knn = KNN(k=k, transpose_mode=False)
+        self.input_trans = nn.Conv1d(8, 8, 1)
+
+        self.layer1 = nn.Sequential(nn.Conv2d(16, 32, kernel_size=1, bias=False),
+                                   nn.GroupNorm(4, 32),
+                                   nn.LeakyReLU(negative_slope=0.2)
+                                   )
+
+        self.layer2 = nn.Sequential(nn.Conv2d(64, 64, kernel_size=1, bias=False),
+                                   nn.GroupNorm(4, 64),
+                                   nn.LeakyReLU(negative_slope=0.2)
+                                   )
+
+        self.layer3 = nn.Sequential(nn.Conv2d(128, 64, kernel_size=1, bias=False),
+                                   nn.GroupNorm(4, 64),
+                                   nn.LeakyReLU(negative_slope=0.2)
+                                   )
+
+        self.layer4 = nn.Sequential(nn.Conv2d(128, 128, kernel_size=1, bias=False),
+                                   nn.GroupNorm(4, 128),
+                                   nn.LeakyReLU(negative_slope=0.2)
+                                   )
+        self.num_features = 128
+    @staticmethod
+    def fps_downsample(coor, x, num_group):
+        xyz = coor.transpose(1, 2).contiguous() # b, n, 3
+        fps_idx = pointnet2_utils.furthest_point_sample(xyz, num_group)
+
+        combined_x = torch.cat([coor, x], dim=1)
+
+        new_combined_x = (
+            pointnet2_utils.gather_operation(
+                combined_x, fps_idx
+            )
+        )
+
+        new_coor = new_combined_x[:, :3]
+        new_x = new_combined_x[:, 3:]
+
+        return new_coor, new_x
+
+    def get_graph_feature(self, coor_q, x_q, coor_k, x_k):
+
+    #    print("get_graph_feature =====================================")
+
+        # coor: bs, 3, np, x: bs, c, np
+    #    print("coor_q shape: ", coor_q.shape)
+    #    print("x_q shape: ", x_q.shape)
+    #    print("coor_k shape: ", coor_k.shape)
+    #    print("x_k shape: ", x_k.shape)
+
+        # coor_q:   [bs, 3, np]     [16, 3, 256]
+        # x_q:      [bs, c, np]     [16, 64, 256]
+        # coor_k:   [bs, 3, np]     [16, 3, 512]
+        # x_k:      [bs, c, np]     [16, 64, 512]
+
+        k = self.k
+        batch_size = x_k.size(0)
+        num_points_k = x_k.size(2)
+        num_points_q = x_q.size(2)
+
+        with torch.no_grad():
+            # _, idx = self.knn(coor_k, coor_q)  # bs k np
+            idx = get_neighborhood_new(k, coor_k.transpose(-1, -2).contiguous(), coor_q.transpose(-1, -2).contiguous()) # B G M
+
+            # idx: [bs, np, k]      [16, 256, 16]
+
+    #        print("idx shape (knn result): ", idx.shape)
+            idx = idx.transpose(-1, -2).contiguous()
+    #        print("idx shape transposed: ", idx.shape)
+            assert idx.shape[1] == k
+            idx_base = torch.arange(0, batch_size, device=x_q.device).view(-1, 1, 1) * num_points_k
+            idx = idx + idx_base
+            idx = idx.view(-1)
+        
+        # idx: [bs*np*k]        [16*256*16=65536]
+
+    #    print("idx final shape: ", idx.shape)
+        num_dims = x_k.size(1)
+        x_k = x_k.transpose(2, 1).contiguous()
+        feature = x_k.view(batch_size * num_points_k, -1)[idx, :]
+
+        
+        # feature: [bs*np*k, c]        [65536, 64]
+    #    print("feature shape: ", feature.shape)
+        feature = feature.view(batch_size, k, num_points_q, num_dims).permute(0, 3, 2, 1).contiguous()
+
+        # feature: [bs, c, np, k]      [16, 64, 256, 16]
+    #    print("feature shape view: ", feature.shape)
+        x_q = x_q.view(batch_size, num_dims, num_points_q, 1).expand(-1, -1, -1, k)
+        
+    #    print("x_q view: ", x_q.shape)
+        feature = torch.cat((feature - x_q, x_q), dim=1)
+
+    #    print("feature final shape: ", feature.shape)
+
+        # feature: [bs, 2c, np, k]      [16, 128, 256, 16]
+
+        return feature
+
+    def forward(self, x, num):
+        '''
+            INPUT:
+                x : bs N 3
+                num : list e.g.[1024, 512]
+            ----------------------
+            OUTPUT:
+
+                coor bs N 3
+                f    bs N C(128) 
+        '''
+
+    #    print("forward =====================================")
+
+    #    print("x shape: ", x.shape)
+    #    print("num: ", num)
+
+
+    # ===================================== HERE =====================================
+        transformed = transform_pointcloud(x)
+
+    # ===================================== HERE =====================================
+
+        
+
+    #    print("transformed shape: ", transformed.shape)
+
+        transformed = transformed.transpose(-1, -2).contiguous()
+
+    #    print("transformed shape transposed: ", transformed.shape)
+
+
+        x = x.transpose(-1, -2).contiguous()
+
+    #    print("x shape transposed: ", x.shape)
+
+        coor = x
+        f = self.input_trans(transformed)
+
+        f = self.get_graph_feature(coor, f, coor, f)
+        f = self.layer1(f)
+        f = f.max(dim=-1, keepdim=False)[0]
+
+        coor_q, f_q = self.fps_downsample(coor, f, num[0])
+        f = self.get_graph_feature(coor_q, f_q, coor, f)
+        f = self.layer2(f)
+        f = f.max(dim=-1, keepdim=False)[0]
+        coor = coor_q
+
+        f = self.get_graph_feature(coor, f, coor, f)
+        f = self.layer3(f)
+        f = f.max(dim=-1, keepdim=False)[0]
+
+        coor_q, f_q = self.fps_downsample(coor, f, num[1])
+        f = self.get_graph_feature(coor_q, f_q, coor, f)
+        f = self.layer4(f)
+        f = f.max(dim=-1, keepdim=False)[0]
+        coor = coor_q
+
+        coor = coor.transpose(-1, -2).contiguous()
+        f = f.transpose(-1, -2).contiguous()
+
+        return coor, f
+        
 class DGCNN_Grouper(nn.Module):
     def __init__(self, k = 16):
         super().__init__()
@@ -734,6 +923,40 @@ class Fold(nn.Module):
 
         return fd2
 
+# Modify the rebuild layer to include label association
+class ModifiedSimpleRebuildFCLayer(nn.Module):
+    def __init__(self, input_dims, step, num_classes=len(ClassLabels), hidden_dim=512):
+        super().__init__()
+        self.input_dims = input_dims
+        self.step = step
+        self.num_classes = num_classes
+        self.layer = Mlp(self.input_dims, hidden_dim, step * 3)
+
+    def forward(self, rec_feature):
+        batch_size = rec_feature.size(0)
+        g_feature = rec_feature.max(1)[0]
+        token_feature = rec_feature
+
+        patch_feature = torch.cat([
+            g_feature.unsqueeze(1).expand(-1, token_feature.size(1), -1),
+            token_feature
+        ], dim=-1)
+        coordinates = self.layer(patch_feature).reshape(batch_size, -1, self.step, 3)
+
+        
+        # Generate random class labels for each point
+        random_class_labels = torch.randint(0, self.num_classes, (batch_size, coordinates.shape[1], self.step), device=rec_feature.device)
+        
+        # Optionally convert to one-hot encoding
+        class_labels_one_hot = torch.nn.functional.one_hot(random_class_labels, num_classes=self.num_classes)
+
+
+        return coordinates, class_labels_one_hot, random_class_labels
+
+# Dummy function to associate numeric labels to descriptive labels
+def get_label_description(numeric_labels):
+    descriptions = [ClassLabels(i+1).name for i in numeric_labels.flatten().tolist()]
+    return descriptions
 class SimpleRebuildFCLayer(nn.Module):
     def __init__(self, input_dims, step, hidden_dim=512):
         super().__init__()
@@ -765,7 +988,7 @@ class PCTransformer(nn.Module):
         decoder_config = config.decoder_config
         self.center_num  = getattr(config, 'center_num', [512, 128])
         self.encoder_type = config.encoder_type
-        assert self.encoder_type in ['graph', 'pn'], f'unexpected encoder_type {self.encoder_type}'
+        assert self.encoder_type in ['graph', 'pn', 'geomgcnn'], f'unexpected encoder_type {self.encoder_type}'
 
         in_chans = 3
         self.num_query = query_num = config.num_query
@@ -775,6 +998,8 @@ class PCTransformer(nn.Module):
         # base encoder
         if self.encoder_type == 'graph':
             self.grouper = DGCNN_Grouper(k = 16)
+        elif self.encoder_type == 'geomgcnn':
+            self.grouper = GeomGCNN_Grouper(k = 16)
         else:
             self.grouper = SimpleEncoder(k = 32, embed_dims=512)
         self.pos_embed = nn.Sequential(
@@ -888,6 +1113,65 @@ class PCTransformer(nn.Module):
 
             return q, coarse, 0
 
+@MODELS.register_module()
+class IntegratedModel(nn.Module):
+    def __init__(self, ada_pointr_config, checkpoint_path, num_classes):
+        super(IntegratedModel, self).__init__()
+        self.ada_pointr = AdaPoinTr(ada_pointr_config)
+        self.load_ada_pointr_checkpoint(checkpoint_path)
+        self.ada_pointr.eval()  # Ensure AdaPoinTr is in evaluation mode
+
+        in_features_size = 21312  # As calculated earlier
+        num_points = 3072  # Total number of points for output
+
+        # Adjust the MLP to match the segmentation task
+        self.mlp = nn.Sequential(
+            nn.Linear(in_features=in_features_size, out_features=1024),
+            nn.ReLU(),
+            nn.Linear(1024, 512),
+            nn.ReLU(),
+            nn.Linear(512, num_points * num_classes)  # Output for each point and class
+        )
+        self.num_classes = num_classes
+    def load_ada_pointr_checkpoint(self, checkpoint_path):
+        checkpoint = torch.load(checkpoint_path, map_location='cpu')
+        # Access the 'base_model' key for the model's state dictionary
+        if 'base_model' in checkpoint:
+            state_dict = checkpoint['base_model']
+        else:
+            print("The checkpoint does not contain the 'base_model' key.")
+            return
+
+        # Adjust for DataParallel training by removing 'module.' prefix if present
+        state_dict = {k.replace('module.', ''): v for k, v in state_dict.items()}
+
+        try:
+            self.ada_pointr.load_state_dict(state_dict, strict=False)
+            print("Model loaded successfully from checkpoint.")
+        except RuntimeError as e:
+            print(f"Error loading state_dict: {e}")
+
+
+    def forward(self, xyz):
+        with torch.no_grad():
+            # Get the embedding from AdaPoinTr
+            outputs = self.ada_pointr(xyz)
+            # Assuming outputs are in the order: pred_fine, relative_xyz, coarse_point_cloud
+            pred_fine, relative_xyz, coarse_point_cloud = outputs[-3], outputs[-2], outputs[-1]
+
+        # Concatenate and flatten tensors as before
+        x = torch.cat([
+            pred_fine.view(pred_fine.size(0), -1),
+            relative_xyz.view(relative_xyz.size(0), -1),
+            coarse_point_cloud.view(coarse_point_cloud.size(0), -1)
+        ], dim=1)
+
+        x = self.mlp(x)  # Process through MLP
+        x = x.view(-1, self.num_classes, 3072)  # Reshape to [batch_size, num_classes, num_points]
+        x = x.transpose(1, 2)  # Change to [batch_size, num_points, num_classes] to match target shape
+
+        return x
+
 ######################################## PoinTr ########################################  
 
 @MODELS.register_module()
@@ -928,7 +1212,7 @@ class AdaPoinTr(nn.Module):
         self.loss_func = ChamferDistanceL1()
 
     def get_loss(self, ret, gt, epoch=1):
-        pred_coarse, denoised_coarse, denoised_fine, pred_fine = ret
+        pred_coarse, denoised_coarse, denoised_fine, pred_fine, relative_xyz, coarse_point_cloud = ret
         
         assert pred_fine.size(1) == gt.size(1)
 
@@ -948,6 +1232,10 @@ class AdaPoinTr(nn.Module):
         return loss_denoised, loss_recon
 
     def forward(self, xyz):
+
+    #    print("AdaPoinTr forward =====================================")
+    #    print("xyz shape: ", xyz.shape)
+
         q, coarse_point_cloud, denoise_length = self.base_model(xyz) # B M C and B M 3
     
         B, M ,C = q.shape
@@ -983,7 +1271,7 @@ class AdaPoinTr(nn.Module):
             assert pred_fine.size(1) == self.num_query * self.factor
             assert pred_coarse.size(1) == self.num_query
 
-            ret = (pred_coarse, denoised_coarse, denoised_fine, pred_fine)
+            ret = (pred_coarse, denoised_coarse, denoised_fine, pred_fine, relative_xyz, coarse_point_cloud)
             return ret
 
         else:

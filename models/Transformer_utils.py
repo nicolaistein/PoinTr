@@ -11,8 +11,136 @@ import torch
 import torch.nn as nn
 from timm.models.layers import DropPath
 from pointnet2_ops import pointnet2_utils
+import torch.nn.functional as F
 from utils.logger import *
 import einops
+import open3d as o3d
+import numpy as np
+
+
+def transform_pointcloud(pointcloud):
+
+    p = pointcloud
+    n = calculate_normals_open3d(p)
+    x = find_nearest_neighbors(p)
+
+    alpha = torch.sqrt(torch.sum((x - p) ** 2, dim=-1) - torch.sum(n * (x - p), dim=-1) ** 2)
+    alpha = alpha.unsqueeze(-1)
+
+    beta = torch.sum(n * (x - p), dim=-1).unsqueeze(-1)
+
+    transformed_points = torch.cat([
+        p,
+        n,
+        alpha,
+        beta
+    ], dim=-1)
+    
+    return transformed_points
+
+def calculate_normals_open3d(points):
+
+    pointcloud_tensor = points.cpu()
+    pointcloud_np = pointcloud_tensor.numpy()
+
+    normals_tensor = torch.zeros_like(pointcloud_tensor, device='cuda:0')
+
+    for i in range(pointcloud_tensor.shape[0]):
+        o3d_pointcloud = o3d.geometry.PointCloud()
+        o3d_pointcloud.points = o3d.utility.Vector3dVector(pointcloud_np[i])
+        o3d_pointcloud.estimate_normals()
+
+        normals_np = np.asarray(o3d_pointcloud.normals)
+
+        normals_tensor[i] = torch.from_numpy(normals_np)
+
+
+    return normals_tensor
+
+def find_nearest_neighbors(points):
+    distances = torch.sum((points.unsqueeze(2) - points.unsqueeze(1)) ** 2, dim=-1)
+    _, indices = torch.topk(distances, k=2, dim=-1, largest=False)
+    
+    # Choosing the second nearest neighbor (the first one is the point itself)
+    x = torch.gather(points, dim=1, index=indices[:, :, 1].unsqueeze(-1).expand(-1, -1, 3))
+    
+    return x
+
+
+def get_neighborhood_new(nsample, xyz, new_xyz):
+    """
+    Calculates the neighborhood for each point. Returns the indices of the selected neighbors.
+    For each point p, the neighborhood is selected as follows:
+        1. Define 4 regions around p made up of 90 degrees each
+        2. Assign each point x of the batch to one of the 4 regions based on the angle between p and x
+        3. Select the nsample/4 nearest neighbors from each region
+    Input:
+        nsample: max sample number in local region
+        xyz: all points, [B, N, C]
+        new_xyz: query points, [B, S, C]
+    Return:
+        group_idx: grouped points index, [B, S, nsample]
+    """
+
+    # Calculate knn for each point
+    sqrdists = torch.cdist(new_xyz, xyz, p=2)
+    num_regions = 8
+    points_per_region = nsample // num_regions
+
+    # Create a mask for selecting points from each region
+    region_mask = torch.arange(num_regions).view(1, 1, -1) * (360.0 / num_regions)
+    region_mask = region_mask.to(new_xyz.device)
+
+    # Calculate angles between query points and all points
+    delta_x = new_xyz[:, :, 0].unsqueeze(2) - xyz[:, :, 0].unsqueeze(1)  # Shape: [B, S, N]
+    delta_y = new_xyz[:, :, 1].unsqueeze(2) - xyz[:, :, 1].unsqueeze(1)  # Shape: [B, S, N]
+    delta_z = new_xyz[:, :, 2].unsqueeze(2) - xyz[:, :, 2].unsqueeze(1)  # Shape: [B, S, N]
+
+    angles = torch.atan2(delta_y, delta_x)  # Shape: [B, S, N]
+    angles2 = torch.atan2(delta_z, torch.sqrt(delta_x ** 2 + delta_y ** 2))  # Shape: [B, S, N]
+
+    # Calculate angles between query points and all points
+    angles = (angles * (180.0 / torch.pi) + 180.0) % 360.0  # ensure positive values
+    angles2 = (angles2 * (180.0 / torch.pi) + 180.0) % 360.0  # ensure positive values
+
+    # Horizontal region index
+    idx_count = 4
+
+    # Vertical region index
+    idx2_count = 2
+
+    region_idx = torch.floor(angles / (360.0 / idx_count)).int()  # Calculate the region index for each point in the batch
+    region_idx[region_idx == 4] = 3
+
+    region_idx2 = torch.floor(angles2 / (360.0 / idx2_count)).int()  # Calculate the region index for each point in the batch
+    region_idx2[region_idx2 == 2] = 1
+
+    region_idx = region_idx + region_idx2 * 4
+
+    # Initialize grouped indices
+    group_idx = torch.zeros((xyz.shape[0], new_xyz.shape[1], nsample), dtype=torch.long, device=new_xyz.device)
+
+    for i in range(num_regions):
+        # Mask for points in this region
+        region_mask = (region_idx == i)
+
+        # Calculate the squared distances for points in this region
+        sqrdists_region = sqrdists.clone()
+        sqrdists_region[~region_mask] = float('inf')  # Set distances for points not in this region to infinity
+        _, indices_region = torch.topk(sqrdists_region, xyz.shape[1], dim=-1, largest=False, sorted=True) # Shape: [B, S, N]
+    
+        # Number of points to select from this region
+        points_to_select = points_per_region
+        
+        # Select the nearest points from this region
+        selected_indices = indices_region[:, :, :points_to_select]  # Shape: [B, S, points_to_select]
+
+        # Fill in the selected indices in the group index tensor
+        group_idx[:, :, i * points_per_region:(i + 1) * points_per_region] = selected_indices
+        
+    return group_idx
+
+
 
 def knn_point(nsample, xyz, new_xyz):
     """
