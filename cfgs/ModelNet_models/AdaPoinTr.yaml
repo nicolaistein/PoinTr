@@ -26,7 +26,7 @@ dataset : {
   train : { _base_: cfgs/dataset_configs/ModelNet.yaml, 
             others: {subset: 'train'}},
   val : { _base_: cfgs/dataset_configs/ModelNet.yaml, 
-            others: {subset: 'test'}},
+            others: {subset: 'val'}},
   test : { _base_: cfgs/dataset_configs/ModelNet.yaml, 
             others: {subset: 'test'}}}
             
@@ -64,6 +64,6 @@ model : {
   
 total_bs : 48
 step_per_update : 1
-max_epoch : 100
+max_epoch : 300
 
 consider_metric: CDL1
