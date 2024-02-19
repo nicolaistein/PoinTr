@@ -133,6 +133,9 @@ def run_net(args, config, train_writer=None, val_writer=None):
                     fixed_points=None,
                 )
                 partial = partial.cuda()
+            elif dataset_name == "ShapeNetPart":
+                gt = data['gt'].cuda()
+                partial = data['partial'].cuda()
             else:
                 raise NotImplementedError(f"Train phase do not support {dataset_name}")
 
@@ -324,6 +327,10 @@ def validate(
                     fixed_points=None,
                 )
                 partial = partial.cuda()
+            elif dataset_name == "ShapeNetPart":
+                gt = data['gt'].cuda()
+                partial = data['partial'].cuda()
+
             else:
                 raise NotImplementedError(f"Train phase do not support {dataset_name}")
 

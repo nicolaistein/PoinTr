@@ -11,6 +11,22 @@ from extensions.chamfer_dist import ChamferDistanceL1
 from .build import MODELS, build_model_from_cfg
 from models.Transformer_utils import *
 from utils import misc
+from enum import Enum, auto
+
+
+# Define an enumeration for class labels
+class ClassLabels(Enum):
+    BUMPER = auto()
+    LIGHTS = auto()
+    WHEELS = auto()
+    DOORS = auto()
+    WINDOWS = auto()
+    ROOF = auto()
+    MIRROR = auto()
+    HOOD = auto()
+    TRUNK = auto()
+    FENDER = auto()
+
 
 class SelfAttnBlockApi(nn.Module):
     r'''
@@ -909,6 +925,40 @@ class Fold(nn.Module):
 
         return fd2
 
+# Modify the rebuild layer to include label association
+class ModifiedSimpleRebuildFCLayer(nn.Module):
+    def __init__(self, input_dims, step, num_classes=len(ClassLabels), hidden_dim=512):
+        super().__init__()
+        self.input_dims = input_dims
+        self.step = step
+        self.num_classes = num_classes
+        self.layer = Mlp(self.input_dims, hidden_dim, step * 3)
+
+    def forward(self, rec_feature):
+        batch_size = rec_feature.size(0)
+        g_feature = rec_feature.max(1)[0]
+        token_feature = rec_feature
+
+        patch_feature = torch.cat([
+            g_feature.unsqueeze(1).expand(-1, token_feature.size(1), -1),
+            token_feature
+        ], dim=-1)
+        coordinates = self.layer(patch_feature).reshape(batch_size, -1, self.step, 3)
+
+        
+        # Generate random class labels for each point
+        random_class_labels = torch.randint(0, self.num_classes, (batch_size, coordinates.shape[1], self.step), device=rec_feature.device)
+        
+        # Optionally convert to one-hot encoding
+        class_labels_one_hot = torch.nn.functional.one_hot(random_class_labels, num_classes=self.num_classes)
+
+
+        return coordinates, class_labels_one_hot, random_class_labels
+
+# Dummy function to associate numeric labels to descriptive labels
+def get_label_description(numeric_labels):
+    descriptions = [ClassLabels(i+1).name for i in numeric_labels.flatten().tolist()]
+    return descriptions
 class SimpleRebuildFCLayer(nn.Module):
     def __init__(self, input_dims, step, hidden_dim=512):
         super().__init__()
@@ -1065,6 +1115,65 @@ class PCTransformer(nn.Module):
 
             return q, coarse, 0
 
+@MODELS.register_module()
+class IntegratedModel(nn.Module):
+    def __init__(self, ada_pointr_config, checkpoint_path, num_classes):
+        super(IntegratedModel, self).__init__()
+        self.ada_pointr = AdaPoinTr(ada_pointr_config)
+        self.load_ada_pointr_checkpoint(checkpoint_path)
+        self.ada_pointr.eval()  # Ensure AdaPoinTr is in evaluation mode
+
+        in_features_size = 21312  # As calculated earlier
+        num_points = 3072  # Total number of points for output
+
+        # Adjust the MLP to match the segmentation task
+        self.mlp = nn.Sequential(
+            nn.Linear(in_features=in_features_size, out_features=1024),
+            nn.ReLU(),
+            nn.Linear(1024, 512),
+            nn.ReLU(),
+            nn.Linear(512, num_points * num_classes)  # Output for each point and class
+        )
+        self.num_classes = num_classes
+    def load_ada_pointr_checkpoint(self, checkpoint_path):
+        checkpoint = torch.load(checkpoint_path, map_location='cpu')
+        # Access the 'base_model' key for the model's state dictionary
+        if 'base_model' in checkpoint:
+            state_dict = checkpoint['base_model']
+        else:
+            print("The checkpoint does not contain the 'base_model' key.")
+            return
+
+        # Adjust for DataParallel training by removing 'module.' prefix if present
+        state_dict = {k.replace('module.', ''): v for k, v in state_dict.items()}
+
+        try:
+            self.ada_pointr.load_state_dict(state_dict, strict=False)
+            print("Model loaded successfully from checkpoint.")
+        except RuntimeError as e:
+            print(f"Error loading state_dict: {e}")
+
+
+    def forward(self, xyz):
+        with torch.no_grad():
+            # Get the embedding from AdaPoinTr
+            outputs = self.ada_pointr(xyz)
+            # Assuming outputs are in the order: pred_fine, relative_xyz, coarse_point_cloud
+            pred_fine, relative_xyz, coarse_point_cloud = outputs[-3], outputs[-2], outputs[-1]
+
+        # Concatenate and flatten tensors as before
+        x = torch.cat([
+            pred_fine.view(pred_fine.size(0), -1),
+            relative_xyz.view(relative_xyz.size(0), -1),
+            coarse_point_cloud.view(coarse_point_cloud.size(0), -1)
+        ], dim=1)
+
+        x = self.mlp(x)  # Process through MLP
+        x = x.view(-1, self.num_classes, 3072)  # Reshape to [batch_size, num_classes, num_points]
+        x = x.transpose(1, 2)  # Change to [batch_size, num_points, num_classes] to match target shape
+
+        return x
+
 ######################################## PoinTr ########################################  
 
 @MODELS.register_module()
@@ -1105,7 +1214,7 @@ class AdaPoinTr(nn.Module):
         self.loss_func = ChamferDistanceL1()
 
     def get_loss(self, ret, gt, epoch=1):
-        pred_coarse, denoised_coarse, denoised_fine, pred_fine = ret
+        pred_coarse, denoised_coarse, denoised_fine, pred_fine, relative_xyz, coarse_point_cloud = ret
         
         assert pred_fine.size(1) == gt.size(1)
 
@@ -1164,7 +1273,7 @@ class AdaPoinTr(nn.Module):
             assert pred_fine.size(1) == self.num_query * self.factor
             assert pred_coarse.size(1) == self.num_query
 
-            ret = (pred_coarse, denoised_coarse, denoised_fine, pred_fine)
+            ret = (pred_coarse, denoised_coarse, denoised_fine, pred_fine, relative_xyz, coarse_point_cloud)
             return ret
 
         else:
