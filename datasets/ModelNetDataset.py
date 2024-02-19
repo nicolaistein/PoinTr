@@ -27,6 +27,7 @@ class ModelNet(data.Dataset):
         self.npoints = config.N_POINTS
         self.subset = config.subset
         self.cars = config.CARS
+        self.cars_id = config.CARS_ID + ""
 
         # Load the dataset indexing file
         self.dataset_categories = []
@@ -36,7 +37,7 @@ class ModelNet(data.Dataset):
                 self.dataset_categories = [
                     dc
                     for dc in self.dataset_categories
-                    if dc["taxonomy_id"] == "02958343"
+                    if dc["taxonomy_id"] == self.cars_id
                 ]
 
         # self.n_renderings = 8 if self.subset == "train" else 1
@@ -136,6 +137,7 @@ class ModelNetv2(data.Dataset):
         self.npoints = config.N_POINTS
         self.subset = config.subset
         self.cars = config.CARS
+        self.cars_id = config.CARS_ID + ""
 
         # Load the dataset indexing file
         self.dataset_categories = []
@@ -145,7 +147,7 @@ class ModelNetv2(data.Dataset):
                 self.dataset_categories = [
                     dc
                     for dc in self.dataset_categories
-                    if dc["taxonomy_id"] == "02958343"
+                    if dc["taxonomy_id"] == self.cars_id
                 ]
 
         self.n_renderings = 8 if self.subset == "train" else 1
