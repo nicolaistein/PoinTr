@@ -517,7 +517,7 @@ class GeomGCNN_Grouper(nn.Module):
         print('using group version 2')
         self.k = k
         # self.knn = KNN(k=k, transpose_mode=False)
-        self.input_trans = nn.Conv1d(3, 8, 1)
+        self.input_trans = nn.Conv1d(8, 8, 1)
 
         self.layer1 = nn.Sequential(nn.Conv2d(16, 32, kernel_size=1, bias=False),
                                    nn.GroupNorm(4, 32),
@@ -635,9 +635,7 @@ class GeomGCNN_Grouper(nn.Module):
 
 
     # ===================================== HERE =====================================
-    #    transformed = transform_pointcloud(x)
-        
-        transformed = x
+        transformed = transform_pointcloud(x)
 
     # ===================================== HERE =====================================
 
